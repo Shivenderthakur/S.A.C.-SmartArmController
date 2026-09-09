@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The ESP32 speaks plain HTTP on the local network, and Android has blocked
+  cleartext by default since API 28.
+
+  This has to be a blanket permit. Android's network security config matches
+  <domain> against host names, not CIDR ranges, so there is no way to express
+  "the private address space" here - listing 192.168.0.0 would match that one
+  literal address and block every real one. The address is typed by the user at
+  runtime, so it cannot be enumerated ahead of time either.
+
+  The exposure is small: the app contacts exactly one host, the one the user
+  entered on the Arm screen, and sends nothing but servo angles.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
