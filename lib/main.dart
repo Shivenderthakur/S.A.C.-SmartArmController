@@ -5,11 +5,14 @@ import 'screens/appearance_screen.dart';
 import 'screens/board_screen.dart';
 import 'screens/connection_screen.dart';
 import 'screens/control_screen.dart';
+import 'screens/steps_screen.dart';
 import 'screens/track_screen.dart';
 import 'services/app_settings.dart';
 import 'services/arm_controller.dart';
 import 'services/arm_link.dart';
 import 'services/joint_config.dart';
+import 'services/sequence_player.dart';
+import 'services/sequence_store.dart';
 import 'services/tracker.dart';
 import 'widgets/glass.dart';
 import 'widgets/slide_nav_bar.dart';
@@ -25,14 +28,25 @@ Future<void> main() async {
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   final settings = await AppSettings.load();
   final joints = await JointConfig.load();
-  runApp(SmartArmApp(settings: settings, joints: joints));
+  final sequences = await SequenceStore.load();
+  runApp(SmartArmApp(
+    settings: settings,
+    joints: joints,
+    sequences: sequences,
+  ));
 }
 
 class SmartArmApp extends StatelessWidget {
-  const SmartArmApp({super.key, required this.settings, required this.joints});
+  const SmartArmApp({
+    super.key,
+    required this.settings,
+    required this.joints,
+    required this.sequences,
+  });
 
   final AppSettings settings;
   final JointConfig joints;
+  final SequenceStore sequences;
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +92,11 @@ class SmartArmApp extends StatelessWidget {
           themeMode: settings.themeMode,
           theme: theme(Brightness.light),
           darkTheme: theme(Brightness.dark),
-          home: HomeShell(settings: settings, joints: joints),
+          home: HomeShell(
+            settings: settings,
+            joints: joints,
+            sequences: sequences,
+          ),
         );
       },
     );
@@ -86,10 +104,16 @@ class SmartArmApp extends StatelessWidget {
 }
 
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key, required this.settings, required this.joints});
+  const HomeShell({
+    super.key,
+    required this.settings,
+    required this.joints,
+    required this.sequences,
+  });
 
   final AppSettings settings;
   final JointConfig joints;
+  final SequenceStore sequences;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -102,6 +126,7 @@ class _HomeShellState extends State<HomeShell>
   static const _destinations = [
     NavDestination(Icons.back_hand_outlined, 'Track'),
     NavDestination(Icons.tune, 'Control'),
+    NavDestination(Icons.playlist_play, 'Steps'),
     NavDestination(Icons.developer_board_outlined, 'Board'),
     NavDestination(Icons.settings_input_antenna, 'Arm'),
     NavDestination(Icons.palette_outlined, 'Theme'),
@@ -113,6 +138,7 @@ class _HomeShellState extends State<HomeShell>
   static const _tints = [
     ScreenTint(Color(0xFFA855F7), Color(0xFFEC4899)),
     ScreenTint(Color(0xFFFB923C), Color(0xFFF43F5E)),
+    ScreenTint(Color(0xFFF59E0B), Color(0xFFFACC15)),
     ScreenTint(Color(0xFF818CF8), Color(0xFF6366F1)),
     ScreenTint(Color(0xFF22D3EE), Color(0xFF3B82F6)),
     ScreenTint(Color(0xFF34D399), Color(0xFF14B8A6)),
@@ -120,6 +146,7 @@ class _HomeShellState extends State<HomeShell>
 
   late final ArmLink _link;
   late final ArmController _arm;
+  late final SequencePlayer _player;
   late final Tracker _tracker;
   late final SlideSelection _nav;
 
@@ -134,6 +161,7 @@ class _HomeShellState extends State<HomeShell>
     // connects, and again whenever the board says it has none.
     _link.mapProvider = () => widget.joints.pinMap;
     _arm = ArmController(_link, widget.joints);
+    _player = SequencePlayer(_arm);
     _tracker = Tracker(_arm.fromHand);
 
     widget.settings.addListener(_pushLinkSettings);
@@ -165,6 +193,7 @@ class _HomeShellState extends State<HomeShell>
     widget.settings.removeListener(_pushLinkSettings);
     widget.joints.removeListener(_pushJointConfig);
     _nav.dispose();
+    _player.dispose();
     _tracker.dispose();
     _arm.dispose();
     _link.dispose();
@@ -212,6 +241,12 @@ class _HomeShellState extends State<HomeShell>
         trailing: pill,
       ),
       ControlScreen(arm: _arm, trailing: pill),
+      StepsScreen(
+        store: widget.sequences,
+        player: _player,
+        arm: _arm,
+        trailing: pill,
+      ),
       BoardScreen(config: widget.joints, link: _link, trailing: pill),
       ConnectionScreen(
         settings: settings,

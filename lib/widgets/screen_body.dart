@@ -23,58 +23,128 @@ class ScreenBody extends StatelessWidget {
 
   final List<Widget> children;
 
+  /// The insets every screen shares: clear of the status bar at the top, and of
+  /// the floating nav bar, its inset and the gesture area at the bottom.
+  static EdgeInsets insets(BuildContext context) {
+    final padding = MediaQuery.paddingOf(context);
+    return EdgeInsets.fromLTRB(
+      20,
+      padding.top + 28,
+      20,
+      padding.bottom + SlideNavBar.height + 44,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final padding = MediaQuery.paddingOf(context);
-    final accent = Theme.of(context).colorScheme.primary;
-
     return ListView(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        padding.top + 28,
-        20,
-        // Clear the bar, its inset and the gesture area underneath it.
-        padding.bottom + SlideNavBar.height + 44,
-      ),
+      padding: insets(context),
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    kicker.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.7,
-                      color: accent,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 31,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.6,
-                      height: 1.05,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (trailing != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 6, left: 8),
-                child: trailing,
-              ),
-          ],
-        ),
+        ScreenHeader(kicker: kicker, title: title, trailing: trailing),
         const SizedBox(height: 20),
         ...children,
+      ],
+    );
+  }
+}
+
+/// The same screen, for content that has to be slivers.
+///
+/// A reorderable list cannot live inside the [ScreenBody] above - that is a
+/// ListView, and a list inside a list has no height to work with - so a screen
+/// that drags its rows around builds itself out of slivers instead, sharing
+/// this header and these insets so it still looks like every other screen.
+class SliverScreenBody extends StatelessWidget {
+  const SliverScreenBody({
+    super.key,
+    required this.kicker,
+    required this.title,
+    required this.slivers,
+    this.trailing,
+  });
+
+  final String kicker;
+  final String title;
+  final Widget? trailing;
+  final List<Widget> slivers;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: ScreenBody.insets(context).copyWith(bottom: 0),
+          sliver: SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: ScreenHeader(
+                kicker: kicker,
+                title: title,
+                trailing: trailing,
+              ),
+            ),
+          ),
+        ),
+        ...slivers,
+        SliverToBoxAdapter(
+          child: SizedBox(height: ScreenBody.insets(context).bottom),
+        ),
+      ],
+    );
+  }
+}
+
+/// The kicker and big title every screen opens with.
+class ScreenHeader extends StatelessWidget {
+  const ScreenHeader({
+    super.key,
+    required this.kicker,
+    required this.title,
+    this.trailing,
+  });
+
+  final String kicker;
+  final String title;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                kicker.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.7,
+                  color: accent,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 31,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.6,
+                  height: 1.05,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (trailing != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 8),
+            child: trailing,
+          ),
       ],
     );
   }
