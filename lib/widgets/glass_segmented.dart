@@ -53,6 +53,9 @@ class _GlassSegmentedState<T> extends State<GlassSegmented<T>>
   @override
   void didUpdateWidget(GlassSegmented<T> old) {
     super.didUpdateWidget(old);
+    // The number of segments can change under us, and the pill's width and its
+    // drag clamp are both derived from it.
+    _selection.count = widget.segments.length;
     // Somewhere else changed the value — follow it, with the same spring.
     final target = _indexOf(widget.value);
     if (target != _selection.index) _selection.select(target);

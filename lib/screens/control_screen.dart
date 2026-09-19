@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../services/arm_controller.dart';
-import '../services/arm_link.dart';
 import '../widgets/glass.dart';
 import '../widgets/screen_body.dart';
 import '../widgets/servo_slider.dart';
@@ -92,26 +91,6 @@ class ControlScreen extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 22),
-          const GlassLabel('Command sent to the arm'),
-          GlassWell(
-            child: SelectableText(
-              ArmLink.command(arm.angles, mirrorClaw: arm.config.mirrorClaw),
-              style: monoStyle(size: 13).copyWith(height: 1.4),
-            ),
-          ),
-          if (arm.config.mirrorClaw) ...[
-            const SizedBox(height: 10),
-            Text(
-              'Channel 5 mirrors the claw, for a gripper built from two opposed '
-              'servos. A fifth joint takes that channel back.',
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.4,
-                color: context.glassMuted,
-              ),
-            ),
-          ],
         ],
       ),
     );

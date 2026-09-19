@@ -249,29 +249,6 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 22),
-          const GlassLabel('Wire format'),
-          GlassWell(
-            child: SelectableText(
-              settings.transport == ArmTransport.tcp
-                  ? '${ArmLink.command(widget.arm.angles)}\\n'
-                  : 'GET /servo?cmd=${ArmLink.command(widget.arm.angles)}',
-              style: monoStyle(size: 12).copyWith(height: 1.5),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'The same "channel,angle;" string the desktop script wrote to the '
-            'serial port. Either transport carries it unchanged — down the '
-            'socket it is one line, terminated by a newline, because TCP is a '
-            'stream of bytes and not of messages. A ready-to-flash sketch that '
-            'serves both is in esp32/ in the repository.',
-            style: TextStyle(
-              fontSize: 12,
-              height: 1.4,
-              color: context.glassMuted,
-            ),
-          ),
         ],
       ),
     );

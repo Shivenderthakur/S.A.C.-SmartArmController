@@ -74,6 +74,8 @@ class _BoardScreenState extends State<BoardScreen> {
           trailing: widget.trailing,
           children: [
             _JointCount(config: config, onChanged: widget.link.pushMap),
+            const SizedBox(height: 10),
+            _DofPresets(config: config, onChanged: widget.link.pushMap),
             const SizedBox(height: 14),
             const GlassLabel('Drag a joint onto the pin it is wired to'),
             _Unassigned(
@@ -183,6 +185,56 @@ class _JointCount extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The arm shapes worth one tap, so nobody holds the stepper down to nine.
+class _DofPresets extends StatelessWidget {
+  const _DofPresets({required this.config, required this.onChanged});
+
+  static const _presets = [4, 5, 6, 8, 9];
+
+  final JointConfig config;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final count in _presets)
+          GestureDetector(
+            onTap: () {
+              config.resize(count);
+              onChanged();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                color: config.channels == count
+                    ? accent.withValues(alpha: 0.2)
+                    : context.glassFill,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color:
+                      config.channels == count ? accent : context.glassStroke,
+                ),
+              ),
+              child: Text(
+                '$count DOF',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: config.channels == count ? null : context.glassMuted,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
