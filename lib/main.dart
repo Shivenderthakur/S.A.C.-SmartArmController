@@ -5,7 +5,6 @@ import 'screens/appearance_screen.dart';
 import 'screens/board_screen.dart';
 import 'screens/connection_screen.dart';
 import 'screens/control_screen.dart';
-import 'screens/steps_screen.dart';
 import 'screens/track_screen.dart';
 import 'services/app_settings.dart';
 import 'services/arm_controller.dart';
@@ -126,7 +125,6 @@ class _HomeShellState extends State<HomeShell>
   static const _destinations = [
     NavDestination(Icons.back_hand_outlined, 'Track'),
     NavDestination(Icons.tune, 'Control'),
-    NavDestination(Icons.playlist_play, 'Steps'),
     NavDestination(Icons.developer_board_outlined, 'Board'),
     NavDestination(Icons.settings_input_antenna, 'Arm'),
     NavDestination(Icons.palette_outlined, 'Theme'),
@@ -138,7 +136,6 @@ class _HomeShellState extends State<HomeShell>
   static const _tints = [
     ScreenTint(Color(0xFFA855F7), Color(0xFFEC4899)),
     ScreenTint(Color(0xFFFB923C), Color(0xFFF43F5E)),
-    ScreenTint(Color(0xFFF59E0B), Color(0xFFFACC15)),
     ScreenTint(Color(0xFF818CF8), Color(0xFF6366F1)),
     ScreenTint(Color(0xFF22D3EE), Color(0xFF3B82F6)),
     ScreenTint(Color(0xFF34D399), Color(0xFF14B8A6)),
@@ -148,6 +145,7 @@ class _HomeShellState extends State<HomeShell>
   late final ArmController _arm;
   late final SequencePlayer _player;
   late final Tracker _tracker;
+  List<int> _lastVisible = const [];
   late final SlideSelection _nav;
 
   @override
@@ -165,7 +163,8 @@ class _HomeShellState extends State<HomeShell>
     _tracker = Tracker(_arm.fromHand);
 
     widget.settings.addListener(_pushLinkSettings);
-    widget.joints.addListener(_pushJointConfig);
+    widget.joints.addListener(_onJointsChanged);
+    _lastVisible = _visibleScreens;
     _pushJointConfig();
     _pushLinkSettings();
     _tracker.start();
@@ -176,6 +175,26 @@ class _HomeShellState extends State<HomeShell>
     // The bar is shorter when Track is gone, and the pill must not be left on a
     // slot that no longer exists.
     _nav.count = _visibleScreens.length;
+  }
+
+  /// The bar, the tints and the pages are all built from the joint config, so a
+  /// change to it has to rebuild this - otherwise Track stays gone after the
+  /// arm shrinks back to something the camera can drive.
+  void _onJointsChanged() {
+    final before = _lastVisible;
+    final after = _visibleScreens;
+    _lastVisible = after;
+
+    _pushJointConfig();
+
+    // Keep the same screen under the thumb as the bar grows or shrinks, rather
+    // than sliding whatever now sits at that index into view.
+    if (_nav.index < before.length) {
+      final at = after.indexOf(before[_nav.index]);
+      if (at >= 0 && at != _nav.index) _nav.select(at);
+    }
+
+    setState(() {});
   }
 
   void _pushLinkSettings() {
@@ -191,7 +210,7 @@ class _HomeShellState extends State<HomeShell>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.settings.removeListener(_pushLinkSettings);
-    widget.joints.removeListener(_pushJointConfig);
+    widget.joints.removeListener(_onJointsChanged);
     _nav.dispose();
     _player.dispose();
     _tracker.dispose();
@@ -240,11 +259,10 @@ class _HomeShellState extends State<HomeShell>
         settings: settings,
         trailing: pill,
       ),
-      ControlScreen(arm: _arm, trailing: pill),
-      StepsScreen(
+      ControlScreen(
+        arm: _arm,
         store: widget.sequences,
         player: _player,
-        arm: _arm,
         trailing: pill,
       ),
       BoardScreen(config: widget.joints, link: _link, trailing: pill),
@@ -276,10 +294,15 @@ class _HomeShellState extends State<HomeShell>
         extendBody: true,
         body: Stack(
           children: [
+            // Its own layer: three full-screen gradients repaint on every frame
+            // of a scrub, and without this they drag the pages with them.
             Positioned.fill(
-              child: AnimatedBuilder(
-                animation: _nav,
-                builder: (context, _) => AmbientBackground(tint: _tintOf(tints)),
+              child: RepaintBoundary(
+                child: AnimatedBuilder(
+                  animation: _nav,
+                  builder: (context, _) =>
+                      AmbientBackground(tint: _tintOf(tints)),
+                ),
               ),
             ),
             for (var i = 0; i < screens.length; i++)

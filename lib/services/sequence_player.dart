@@ -83,6 +83,7 @@ class SequencePlayer extends ChangeNotifier {
     }
 
     final step = sequence.steps[_index];
+    final was = (_phase, _index);
     _elapsed += tick;
 
     if (_phase == PlayPhase.moving) {
@@ -108,7 +109,9 @@ class SequencePlayer extends ChangeNotifier {
       _next(sequence);
     }
 
-    notifyListeners();
+    // Twenty times a second is the right rate for the arm and far too fast for
+    // the screen: only a step or phase boundary is worth a rebuild.
+    if (was != (_phase, _index)) notifyListeners();
   }
 
   int _at(int joint, int to, double t) {

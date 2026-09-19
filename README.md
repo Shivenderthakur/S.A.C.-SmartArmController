@@ -127,8 +127,7 @@ with a click of haptic feedback at each boundary.
 | screen | what |
 | --- | --- |
 | **Track** | Camera, hand skeleton, live angles, frame rate. Flip camera, mirror, and an Auto/Manual switch. Leaves the bar entirely on an arm of more than four joints, which is more than the camera can drive. |
-| **Control** | Drive each joint by hand, one slider each. |
-| **Steps** | Record where the arm is as a named step, drag the steps into order, set each one's speed and how long it holds, and play the routine back. Saved on the phone. |
+| **Control** | Drive each joint by hand, one slider each — and, below them, record the pose as a named step. Drag steps into order, give each a speed and a hold, and play the routine back. Saved on the phone. |
 | **Board** | The ESP32 drawing. Drag a joint onto the pin it is wired to, and pick how many joints the arm has — 4 to 9 DOF. |
 | **Arm** | ESP32 address, connection test, the send switch, and the rate limit. |
 | **Theme** | Light, dark or follow the system; five accents, applied instantly. |
