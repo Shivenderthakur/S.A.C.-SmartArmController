@@ -130,18 +130,22 @@ const defaultJoints = [
   Joint(name: 'X (base)', min: xMin, max: xMax, rest: xMid, gpio: 16, source: TrackSource.base),
   Joint(name: 'Y (lift)', min: yMin, max: yMax, rest: yMid, gpio: 17, source: TrackSource.lift),
   Joint(name: 'Z (reach)', min: zMin, max: zMax, rest: zMid, gpio: 18, source: TrackSource.reach),
-  Joint(
-    name: 'Claw',
-    min: clawCloseAngle,
-    max: clawOpenAngle,
-    rest: clawOpenAngle,
-    gpio: 19,
-    twoServos: true,
-    mirrorGpio: 21,
-    isGripper: true,
-    source: TrackSource.claw,
-  ),
+  gripperJoint,
 ];
+
+/// The thing on the end, as it comes: two servos facing each other, on 19 and
+/// 21. Adding a gripper back to an arm starts from this.
+const gripperJoint = Joint(
+  name: 'Claw',
+  min: clawCloseAngle,
+  max: clawOpenAngle,
+  rest: clawOpenAngle,
+  gpio: 19,
+  twoServos: true,
+  mirrorGpio: 21,
+  isGripper: true,
+  source: TrackSource.claw,
+);
 
 /// A joint added by growing the arm: no tracking source, full travel, parked in
 /// the middle.

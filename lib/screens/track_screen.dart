@@ -90,8 +90,10 @@ class TrackScreen extends StatelessWidget {
                 listenable: arm,
                 builder: (context, _) => GlassButton(
                   // Short enough to survive a large text size: GlassButton is a
-                  // fixed height and ellipsises rather than wrapping.
-                  label: arm.manual ? 'Manual control' : 'Hand tracking',
+                  // fixed height and ellipsises rather than wrapping. It says
+                  // which mode is on rather than leaving it to be read off a
+                  // switch position.
+                  label: arm.manual ? 'Manual control' : 'AI mode · ON',
                   icon: arm.manual ? Icons.pan_tool_outlined : Icons.back_hand,
                   filled: !arm.manual,
                   onPressed: () => arm.manual = !arm.manual,

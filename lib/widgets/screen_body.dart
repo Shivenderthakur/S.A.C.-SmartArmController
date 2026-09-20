@@ -31,7 +31,10 @@ class ScreenBody extends StatelessWidget {
       20,
       padding.top + 28,
       20,
-      padding.bottom + SlideNavBar.height + 44,
+      // Clear of the bar, its inset, the gesture area - and then some. Landing
+      // a card's last line exactly against the bar reads as clipped rather
+      // than as something to scroll past.
+      padding.bottom + SlideNavBar.height + 72,
     );
   }
 

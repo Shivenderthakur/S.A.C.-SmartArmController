@@ -73,9 +73,11 @@ class _StepsScreenState extends State<StepsScreen> {
                   ),
                   const SizedBox(height: 18),
                   GlassLabel(
-                    routine.steps.isEmpty
-                        ? 'No steps yet'
-                        : '${routine.steps.length} steps, drag to reorder',
+                    switch (routine.steps.length) {
+                      0 => 'No steps yet',
+                      1 => '1 step',
+                      final n => '$n steps, drag to reorder',
+                    },
                   ),
                 ],
               ),

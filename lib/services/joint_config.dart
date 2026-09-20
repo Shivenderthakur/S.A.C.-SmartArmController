@@ -179,6 +179,25 @@ class JointConfig extends ChangeNotifier {
     _save();
   }
 
+  /// Put a gripper on the end, or take it off. An arm has at most one, and it
+  /// is always the last joint.
+  void setGripper(bool on) {
+    final at = _joints.indexWhere((j) => j.isGripper);
+    if (on == (at >= 0)) return;
+
+    if (!on) {
+      _joints.removeAt(at);
+    } else {
+      if (_joints.length >= maxJoints) return;
+      final free = allowedPins.where((p) => ownerOf(p) == null).toList();
+      _joints.add(gripperJoint.copyWith(
+        gpio: free.isNotEmpty ? free.first : Joint.unassigned,
+        mirrorGpio: free.length > 1 ? free[1] : Joint.unassigned,
+      ));
+    }
+    _save();
+  }
+
   int? _ownerIn(List<Joint> joints, int gpio) {
     for (var i = 0; i < joints.length; i++) {
       final j = joints[i];

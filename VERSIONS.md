@@ -16,7 +16,22 @@ the fifth joint of any larger arm. It is configuration now — a joint can name 
 second pin, gets the opposite angle on a channel of its own, and the link no
 longer knows what a claw is.
 
-### Steps, on the Control screen
+### The gripper stays
+
+Choosing 3 DOF used to delete the claw: resizing truncated the joint list and
+the gripper happened to be last. A joint now knows whether it is the gripper,
+it always sits on the end, a DOF count means the joints of the arm itself, and
+the Board screen has a switch to put one back on an arm that lost it.
+
+### Screens that belong to each other
+
+The screen tints were a fixed palette with no relation to the chosen accent, so
+a teal app was washed in orange, violet and green. Each screen now takes the
+accent a set distance around the hue wheel, and the whole set moves when the
+accent does. AI mode also says so in words, with an ON tag, rather than leaving
+it to be read off a switch.
+
+### Steps, on their own tab
 
 Add step opens the arm itself: a slider per joint, however many this arm has,
 moving the servos as you drag them. Leave the arm where the step should be,

@@ -106,6 +106,14 @@ class _BoardScreenState extends State<BoardScreen> {
             _JointCount(config: config, onChanged: widget.link.pushMap),
             const SizedBox(height: 10),
             _DofPresets(config: config, onChanged: widget.link.pushMap),
+            const SizedBox(height: 10),
+            _Gripper(
+              config: config,
+              onChanged: (on) {
+                config.setGripper(on);
+                widget.link.pushMap();
+              },
+            ),
             const SizedBox(height: 14),
             _TwoServoJoints(config: config, onChanged: _setTwoServos),
             const SizedBox(height: 14),
@@ -213,6 +221,56 @@ class _JointCount extends StatelessWidget {
                 : null,
             icon: const Icon(Icons.add_circle_outline),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Whether there is something on the end that grips.
+class _Gripper extends StatelessWidget {
+  const _Gripper({required this.config, required this.onChanged});
+
+  final JointConfig config;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.fromLTRB(18, 12, 14, 12),
+      child: Row(
+        children: [
+          Icon(
+            Icons.pan_tool_alt_outlined,
+            size: 20,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Gripper on the end',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  config.hasGripper
+                      ? 'Always the last joint, and changing the DOF never '
+                          'takes it away.'
+                      : 'This arm has none. Turn it on and it comes back with '
+                          'its pair of servos.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.35,
+                    color: context.glassMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(value: config.hasGripper, onChanged: onChanged),
         ],
       ),
     );
