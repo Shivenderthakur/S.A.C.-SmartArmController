@@ -63,6 +63,7 @@ class _StepsScreenState extends State<StepsScreen> {
                     store: widget.store,
                     current: routine,
                     onPick: _use,
+                    onDelete: _delete,
                   ),
                   const SizedBox(height: 12),
                   _Transport(
@@ -117,6 +118,37 @@ class _StepsScreenState extends State<StepsScreen> {
         );
       },
     );
+  }
+
+  /// Throw a routine away. Asking first only when there is something to lose:
+  /// a routine with no steps in it is not worth a dialog.
+  Future<void> _delete(ArmSequence routine) async {
+    if (routine.steps.isNotEmpty) {
+      final sure = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Delete ${routine.name}?'),
+          content: Text(
+            'Its ${routine.steps.length} '
+            '${routine.steps.length == 1 ? "step goes" : "steps go"} with it.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Keep'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (sure != true || !mounted) return;
+    }
+
+    widget.store.remove(routine.id);
+    _use(widget.store.sequences.first);
   }
 
   /// Place the arm, then keep it.
@@ -356,11 +388,13 @@ class _Routines extends StatelessWidget {
     required this.store,
     required this.current,
     required this.onPick,
+    required this.onDelete,
   });
 
   final SequenceStore store;
   final ArmSequence current;
   final ValueChanged<ArmSequence> onPick;
+  final ValueChanged<ArmSequence> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -385,12 +419,31 @@ class _Routines extends StatelessWidget {
                       routine.id == current.id ? accent : context.glassStroke,
                 ),
               ),
-              child: Text(
-                '${routine.name} · ${routine.steps.length}',
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${routine.name} · ${routine.steps.length}',
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  // Only the open routine offers it: five chips each with a
+                  // cross is a row of things to hit by accident.
+                  if (routine.id == current.id) ...[
+                    const SizedBox(width: 9),
+                    GestureDetector(
+                      onTap: () => onDelete(routine),
+                      behavior: HitTestBehavior.opaque,
+                      child: Icon(
+                        Icons.close,
+                        size: 15,
+                        color: context.glassMuted,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
