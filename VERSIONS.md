@@ -4,9 +4,7 @@ What changed in each release, newest first. The version lives in
 `pubspec.yaml`; pushing a new one to `main` is what makes CI tag it and publish
 the APK.
 
-## Unreleased
-
-Work sitting on `feat/dof-modes` and `feat/step-sequencer`, not yet merged.
+## 3.2.0 — 20 September 2026
 
 ### The claw is two servos
 
