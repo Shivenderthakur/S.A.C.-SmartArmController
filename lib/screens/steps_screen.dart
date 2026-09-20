@@ -286,10 +286,20 @@ class _StepsScreenState extends State<StepsScreen> {
     name.dispose();
   }
 
+  /// Everything about a step, including the pose.
+  ///
+  /// The arm moves to the step as the sheet opens, so the sliders start where
+  /// it already is and re-posing is the same gesture as recording. Leaving
+  /// without saving puts the arm back.
   Future<void> _edit(ArmSequence routine, ArmStep step) async {
+    final arm = widget.arm;
+    final before = List<int>.of(arm.angles);
     final name = TextEditingController(text: step.name);
     var speed = step.speed;
     var dwell = step.dwell.inMilliseconds;
+    var done = false;
+
+    arm.setPose(step.angles);
 
     await showModalBottomSheet<void>(
       context: context,
@@ -301,83 +311,113 @@ class _StepsScreenState extends State<StepsScreen> {
             16,
             16,
             16,
-            MediaQuery.viewInsetsOf(context).bottom + 24,
+            MediaQuery.viewInsetsOf(context).bottom + 20,
           ),
-          child: GlassCard(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const GlassLabel('Name'),
-                TextField(
-                  controller: name,
-                  decoration:
-                      const InputDecoration(border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 18),
-                _Dial(
-                  label: 'Speed',
-                  value: '$speed deg/s',
-                  slider: ServoSlider(
-                    value: speed.toDouble(),
-                    min: ArmStep.minSpeed.toDouble(),
-                    max: ArmStep.maxSpeed.toDouble(),
-                    onChanged: (v) => setSheet(() => speed = v.round()),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _Dial(
-                  label: 'Hold here',
-                  value: '${(dwell / 1000).toStringAsFixed(1)} s',
-                  slider: ServoSlider(
-                    value: dwell.toDouble(),
-                    min: 0,
-                    max: 5000,
-                    onChanged: (v) => setSheet(() => dwell = v.round()),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Row(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.86,
+            ),
+            child: GlassCard(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: GlassButton(
-                        label: 'Delete',
-                        icon: Icons.delete_outline,
-                        onPressed: () {
-                          _use(widget.store.removeStep(routine, step.id));
-                          Navigator.of(context).pop();
-                        },
+                    const GlassLabel('Where the arm goes'),
+                    Text(
+                      'The arm is standing in this step now. Move it and the '
+                      'step moves with it.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.4,
+                        color: context.glassMuted,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: GlassButton(
-                        label: 'Save',
-                        icon: Icons.check,
-                        filled: true,
-                        onPressed: () {
-                          _use(widget.store.replaceStep(
-                            routine,
-                            step.copyWith(
-                              name: name.text.trim().isEmpty
-                                  ? step.name
-                                  : name.text.trim(),
-                              speed: speed,
-                              dwell: Duration(milliseconds: dwell),
-                            ),
-                          ));
-                          Navigator.of(context).pop();
-                        },
+                    const SizedBox(height: 14),
+                    for (var i = 0; i < arm.config.channels; i++) ...[
+                      JointSlider(arm: arm, index: i),
+                      const SizedBox(height: 10),
+                    ],
+                    const SizedBox(height: 8),
+                    const GlassLabel('Name'),
+                    TextField(
+                      controller: name,
+                      decoration:
+                          const InputDecoration(border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 18),
+                    _Dial(
+                      label: 'Speed',
+                      value: '$speed deg/s',
+                      slider: ServoSlider(
+                        value: speed.toDouble(),
+                        min: ArmStep.minSpeed.toDouble(),
+                        max: ArmStep.maxSpeed.toDouble(),
+                        onChanged: (v) => setSheet(() => speed = v.round()),
                       ),
+                    ),
+                    const SizedBox(height: 14),
+                    _Dial(
+                      label: 'Hold here',
+                      value: '${(dwell / 1000).toStringAsFixed(1)} s',
+                      slider: ServoSlider(
+                        value: dwell.toDouble(),
+                        min: 0,
+                        max: 5000,
+                        onChanged: (v) => setSheet(() => dwell = v.round()),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GlassButton(
+                            label: 'Delete',
+                            icon: Icons.delete_outline,
+                            onPressed: () {
+                              done = true;
+                              _use(widget.store.removeStep(routine, step.id));
+                              Navigator.of(context).pop();
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: GlassButton(
+                            label: 'Save',
+                            icon: Icons.check,
+                            filled: true,
+                            onPressed: () {
+                              done = true;
+                              _use(widget.store.replaceStep(
+                                routine,
+                                step.copyWith(
+                                  name: name.text.trim().isEmpty
+                                      ? step.name
+                                      : name.text.trim(),
+                                  angles: List<int>.of(arm.angles),
+                                  speed: speed,
+                                  dwell: Duration(milliseconds: dwell),
+                                ),
+                              ));
+                              Navigator.of(context).pop();
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
       ),
     );
+
+    // Dismissed without deciding: the arm was moved to show the step, and
+    // possibly moved again by the sliders, so put it back.
+    if (!done) arm.setPose(before);
     name.dispose();
   }
 }
