@@ -41,6 +41,12 @@ where it was.
 Steps drag into order, the routine has a wait between steps and a repeat
 switch, and the whole thing plays back. Saved on the phone.
 
+Editing a step opens the same sliders: the arm moves to the step, so changing
+where it goes is the same gesture as recording it, and leaving without saving
+puts the arm back. Name, speed and hold are all editable too, and the open
+routine carries a cross to throw the whole thing away — asking first only when
+there are steps to lose.
+
 Playback interpolates in the app rather than sending one pose per step: the
 firmware ramps at its own fixed rate and never reports arrival, so sending a
 pose a degree or two along every 50 ms is what makes a step's speed mean
