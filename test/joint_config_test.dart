@@ -12,7 +12,9 @@ void main() {
   test('starts as the arm the app has always driven', () async {
     final config = await freshConfig();
 
-    // Four joints, five servos: the claw closes with two.
+    // Three joints and a gripper, five servos: the gripper closes with two.
+    expect(config.armJoints, 3);
+    expect(config.hasGripper, isTrue);
     expect(config.channels, 4);
     expect(config.servos, 5);
     expect(config.pinMap, [16, 17, 18, 19, 21]);
@@ -68,11 +70,12 @@ void main() {
 
     config.resize(5);
 
+    // Five joints and the gripper still on the end.
+    expect(config.channels, 6);
     expect(config.trackingUsable, isFalse);
-    // The claw keeps both its servos: the fifth joint is a channel of its own
-    // rather than something the claw was quietly borrowing.
-    expect(config.joints[3].twoServos, isTrue);
-    expect(config.servos, 6);
+    expect(config.joints.last.isGripper, isTrue);
+    expect(config.joints.last.twoServos, isTrue);
+    expect(config.servos, 7);
   });
 
   test('growing and shrinking keeps the joints that survive', () async {
@@ -80,7 +83,8 @@ void main() {
     config.assign(0, 32);
 
     config.resize(6);
-    expect(config.channels, 6);
+    expect(config.armJoints, 6);
+    expect(config.channels, 7, reason: 'six joints and the gripper');
     expect(config.pinMap.first, 32, reason: 'an existing assignment was lost');
 
     final taken = config.pinMap.where((p) => p != Joint.unassigned).toList();
@@ -90,21 +94,29 @@ void main() {
         reason: 'two servos share a pin');
 
     config.resize(3);
-    expect(config.channels, 3);
+    expect(config.armJoints, 3);
     expect(config.pinMap.first, 32);
+    // Asking for fewer joints used to delete the thing on the end that grips.
+    expect(config.hasGripper, isTrue,
+        reason: 'shrinking the arm took the gripper with it');
+    expect(config.joints.last.isGripper, isTrue);
+    expect(config.channels, 4);
   });
 
   test('survives a restart', () async {
     SharedPreferences.setMockInitialValues({});
     final first = await JointConfig.load();
     first.resize(6);
-    first.rename(5, 'Gripper');
+    first.rename(5, 'Wrist');
     first.assign(5, 33);
 
     final second = await JointConfig.load();
-    expect(second.channels, 6);
-    expect(second.joints[5].name, 'Gripper');
+    expect(second.channels, 7);
+    expect(second.joints[5].name, 'Wrist');
     expect(second.joints[5].gpio, 33);
+    expect(second.joints.last.isGripper, isTrue,
+        reason: 'the gripper did not survive storage');
+    expect(second.joints.last.twoServos, isTrue);
   });
 
   test('falls back to the default arm when the stored config is unreadable',

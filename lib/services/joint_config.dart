@@ -20,7 +20,7 @@ class JointConfig extends ChangeNotifier {
   static const _key = 'joints_v1';
 
   final SharedPreferences _prefs;
-  List<Joint> _joints;
+  final List<Joint> _joints;
 
   static Future<JointConfig> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -51,6 +51,12 @@ class JointConfig extends ChangeNotifier {
 
   /// How many joints there are - one slider, one recorded angle each.
   int get channels => _joints.length;
+
+  /// The joints that make up the arm itself, which is what a DOF count means.
+  /// The gripper on the end is not one of them.
+  int get armJoints => _joints.where((j) => !j.isGripper).length;
+
+  bool get hasGripper => _joints.any((j) => j.isGripper);
 
   /// How many servos those joints drive. A claw is two.
   int get servos => channels + _joints.where((j) => j.twoServos).length;
@@ -142,25 +148,43 @@ class JointConfig extends ChangeNotifier {
     _save();
   }
 
-  /// Grows or shrinks the arm, keeping the joints that survive exactly as they
-  /// were — resizing is not a reason to lose someone's pin assignments.
+  /// Sets how many joints the arm has, keeping the ones that survive exactly as
+  /// they were — resizing is not a reason to lose someone's pin assignments.
+  ///
+  /// The gripper is never one of them. Asking for three joints gives three and
+  /// the gripper still on the end, because dropping the thing that grips is
+  /// never what "fewer joints" meant.
   void resize(int count) {
-    final wanted = count.clamp(1, maxJoints);
-    if (wanted == _joints.length) return;
+    final gripper = _joints.where((j) => j.isGripper).toList();
+    final arm = _joints.where((j) => !j.isGripper).toList();
+    final wanted = count.clamp(1, maxJoints - gripper.length);
+    if (wanted == arm.length) return;
 
-    if (wanted < _joints.length) {
-      _joints = _joints.sublist(0, wanted);
+    if (wanted < arm.length) {
+      arm.removeRange(wanted, arm.length);
     } else {
-      for (var i = _joints.length; i < wanted; i++) {
-        final joint = spareJoint(i);
+      for (var i = arm.length; i < wanted; i++) {
         final free = allowedPins.firstWhere(
-          (p) => ownerOf(p) == null,
+          (p) => _ownerIn([...arm, ...gripper], p) == null,
           orElse: () => Joint.unassigned,
         );
-        _joints.add(joint.copyWith(gpio: free));
+        arm.add(spareJoint(i).copyWith(gpio: free));
       }
     }
+
+    _joints
+      ..clear()
+      ..addAll(arm)
+      ..addAll(gripper);
     _save();
+  }
+
+  int? _ownerIn(List<Joint> joints, int gpio) {
+    for (var i = 0; i < joints.length; i++) {
+      final j = joints[i];
+      if (j.gpio == gpio || (j.twoServos && j.mirrorGpio == gpio)) return i;
+    }
+    return null;
   }
 
   void _save() {

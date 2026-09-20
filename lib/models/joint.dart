@@ -19,6 +19,7 @@ class Joint {
     this.gpio = unassigned,
     this.twoServos = false,
     this.mirrorGpio = unassigned,
+    this.isGripper = false,
     this.source,
   });
 
@@ -44,6 +45,12 @@ class Joint {
   /// The second servo's pin, or [unassigned] when it is not wired yet.
   final int mirrorGpio;
 
+  /// The thing on the end that grips. An arm has at most one, it is always the
+  /// last joint, and changing how many joints the arm has never takes it away -
+  /// asking for three joints means three and the gripper, not three instead of
+  /// it.
+  final bool isGripper;
+
   /// Which tracked value drives this joint, if any.
   final TrackSource? source;
 
@@ -58,6 +65,7 @@ class Joint {
     int? gpio,
     bool? twoServos,
     int? mirrorGpio,
+    bool? isGripper,
     Object? source = _keep,
   }) =>
       Joint(
@@ -68,6 +76,7 @@ class Joint {
         gpio: gpio ?? this.gpio,
         twoServos: twoServos ?? this.twoServos,
         mirrorGpio: mirrorGpio ?? this.mirrorGpio,
+        isGripper: isGripper ?? this.isGripper,
         source: identical(source, _keep) ? this.source : source as TrackSource?,
       );
 
@@ -79,6 +88,7 @@ class Joint {
         'gpio': gpio,
         'two_servos': twoServos,
         'mirror_gpio': mirrorGpio,
+        'is_gripper': isGripper,
         'source': source?.name,
       };
 
@@ -94,6 +104,8 @@ class Joint {
       // Older entries only knew about the pin.
       twoServos: json['two_servos'] as bool? ?? mirrorGpio != unassigned,
       mirrorGpio: mirrorGpio,
+      // Older entries only had the claw, and it drove the gripper source.
+      isGripper: json['is_gripper'] as bool? ?? raw == 'claw',
       source: TrackSource.values.where((s) => s.name == raw).firstOrNull,
     );
   }
@@ -126,6 +138,7 @@ const defaultJoints = [
     gpio: 19,
     twoServos: true,
     mirrorGpio: 21,
+    isGripper: true,
     source: TrackSource.claw,
   ),
 ];

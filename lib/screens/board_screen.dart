@@ -190,7 +190,7 @@ class _JointCount extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${config.servos} servos. ${config.trackingUsable ? "The camera can drive this arm" : "Too many joints for the camera — sliders and steps only"}',
+                  '${config.armJoints} joints${config.hasGripper ? " and a gripper" : ""}, ${config.servos} servos. ${config.trackingUsable ? "The camera can drive this arm" : "Too many for the camera — sliders and steps only"}',
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.35,
@@ -202,13 +202,14 @@ class _JointCount extends StatelessWidget {
           ),
           IconButton(
             onPressed:
-                config.channels > 1 ? () => resize(config.channels - 1) : null,
+                config.armJoints > 1 ? () => resize(config.armJoints - 1) : null,
             icon: const Icon(Icons.remove_circle_outline),
           ),
-          Text('${config.channels}', style: monoStyle(size: 22, colour: accent)),
+          Text('${config.armJoints}',
+              style: monoStyle(size: 22, colour: accent)),
           IconButton(
             onPressed: config.channels < maxJoints
-                ? () => resize(config.channels + 1)
+                ? () => resize(config.armJoints + 1)
                 : null,
             icon: const Icon(Icons.add_circle_outline),
           ),
@@ -222,7 +223,8 @@ class _JointCount extends StatelessWidget {
 class _DofPresets extends StatelessWidget {
   const _DofPresets({required this.config, required this.onChanged});
 
-  static const _presets = [4, 5, 6, 8, 9];
+  /// Joints in the arm itself; the gripper is always there besides.
+  static const _presets = [3, 4, 5, 6, 8];
 
   final JointConfig config;
   final VoidCallback onChanged;
@@ -244,13 +246,13 @@ class _DofPresets extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
               decoration: BoxDecoration(
-                color: config.channels == count
+                color: config.armJoints == count
                     ? accent.withValues(alpha: 0.2)
                     : context.glassFill,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color:
-                      config.channels == count ? accent : context.glassStroke,
+                      config.armJoints == count ? accent : context.glassStroke,
                 ),
               ),
               child: Text(
@@ -258,7 +260,7 @@ class _DofPresets extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
-                  color: config.channels == count ? null : context.glassMuted,
+                  color: config.armJoints == count ? null : context.glassMuted,
                 ),
               ),
             ),

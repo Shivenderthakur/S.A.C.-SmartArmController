@@ -5,6 +5,7 @@ import 'screens/appearance_screen.dart';
 import 'screens/board_screen.dart';
 import 'screens/connection_screen.dart';
 import 'screens/control_screen.dart';
+import 'screens/steps_screen.dart';
 import 'screens/track_screen.dart';
 import 'services/app_settings.dart';
 import 'services/arm_controller.dart';
@@ -125,21 +126,40 @@ class _HomeShellState extends State<HomeShell>
   static const _destinations = [
     NavDestination(Icons.back_hand_outlined, 'Track'),
     NavDestination(Icons.tune, 'Control'),
+    NavDestination(Icons.playlist_play, 'Steps'),
     NavDestination(Icons.developer_board_outlined, 'Board'),
     NavDestination(Icons.settings_input_antenna, 'Arm'),
     NavDestination(Icons.palette_outlined, 'Theme'),
   ];
 
-  /// One tint per screen, straight from the design. The glass stays the same
-  /// everywhere; only this changes, and it changes continuously as the bar is
-  /// scrubbed rather than cutting over at the boundary.
-  static const _tints = [
-    ScreenTint(Color(0xFFA855F7), Color(0xFFEC4899)),
-    ScreenTint(Color(0xFFFB923C), Color(0xFFF43F5E)),
-    ScreenTint(Color(0xFF818CF8), Color(0xFF6366F1)),
-    ScreenTint(Color(0xFF22D3EE), Color(0xFF3B82F6)),
-    ScreenTint(Color(0xFF34D399), Color(0xFF14B8A6)),
-  ];
+  /// One tint per screen, built from the chosen accent rather than from a fixed
+  /// palette: a teal app washed in orange and violet read as two designs at
+  /// once. Each screen takes the accent a different distance around the hue
+  /// wheel, so they stay distinguishable while belonging together — and the
+  /// whole set moves when the accent does.
+  List<ScreenTint> _tintsFor(Color accent) {
+    final base = HSLColor.fromColor(accent);
+    ScreenTint at(double turn, double lift) {
+      final a = base
+          .withHue((base.hue + turn) % 360)
+          .withSaturation((base.saturation * 0.95).clamp(0.35, 0.85))
+          .withLightness((base.lightness + lift).clamp(0.45, 0.72));
+      final b = base
+          .withHue((base.hue + turn + 26) % 360)
+          .withSaturation((base.saturation * 0.9).clamp(0.3, 0.8))
+          .withLightness((base.lightness + lift - 0.04).clamp(0.4, 0.68));
+      return ScreenTint(a.toColor(), b.toColor());
+    }
+
+    return [
+      at(-34, 0.06),
+      at(-12, 0.02),
+      at(10, 0.04),
+      at(32, 0.0),
+      at(54, 0.03),
+      at(76, 0.06),
+    ];
+  }
 
   late final ArmLink _link;
   late final ArmController _arm;
@@ -258,7 +278,8 @@ class _HomeShellState extends State<HomeShell>
         settings: settings,
         trailing: pill,
       ),
-      ControlScreen(
+      ControlScreen(arm: _arm, trailing: pill),
+      StepsScreen(
         arm: _arm,
         store: widget.sequences,
         player: _player,
@@ -274,9 +295,10 @@ class _HomeShellState extends State<HomeShell>
       AppearanceScreen(settings: settings, trailing: pill),
     ];
 
+    final allTints = _tintsFor(settings.accentColor);
     final visible = _visibleScreens;
     final destinations = [for (final i in visible) _destinations[i]];
-    final tints = [for (final i in visible) _tints[i]];
+    final tints = [for (final i in visible) allTints[i]];
     final screens = [for (final i in visible) all[i]];
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
