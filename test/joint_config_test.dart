@@ -12,10 +12,40 @@ void main() {
   test('starts as the arm the app has always driven', () async {
     final config = await freshConfig();
 
+    // Four joints, five servos: the claw closes with two.
     expect(config.channels, 4);
-    expect(config.pinMap, [16, 17, 18, 19]);
-    expect(config.mirrorClaw, isTrue);
+    expect(config.servos, 5);
+    expect(config.pinMap, [16, 17, 18, 19, 21]);
     expect(config.trackingUsable, isTrue);
+  });
+
+  test('the claw\'s second servo gets the opposite angle', () async {
+    final config = await freshConfig();
+
+    // Joints first, then the mirrored halves, in the same order as the pin map
+    // the board was told.
+    expect(config.wireAngles([10, 20, 30, 40]), [10, 20, 30, 40, 140]);
+
+    // Unwiring the second servo leaves the joint still expecting one: the
+    // channel stays, with no pin behind it.
+    config.unassign(3, mirror: true);
+    expect(config.servos, 5);
+    expect(config.pinMap, [16, 17, 18, 19, Joint.unassigned]);
+
+    // Saying it has only one is what drops the channel.
+    config.setTwoServos(3, false);
+    expect(config.wireAngles([10, 20, 30, 40]), [10, 20, 30, 40]);
+    expect(config.servos, 4);
+  });
+
+  test('a pin driving half a claw cannot drive anything else', () async {
+    final config = await freshConfig();
+
+    expect(config.ownerOf(21), 3, reason: 'the claw owns its second pin');
+    expect(config.isMirrorPin(21), isTrue);
+    expect(config.assign(0, 21), AssignResult.taken);
+    expect(config.assign(3, 21), AssignResult.taken,
+        reason: 'one pin cannot be both halves of the same claw');
   });
 
   test('refuses a pin that already drives another joint', () async {
@@ -24,24 +54,25 @@ void main() {
     expect(config.assign(1, 16), AssignResult.taken);
     expect(config.pinMap[1], 17, reason: 'the refused pin was taken anyway');
 
-    expect(config.assign(1, 21), AssignResult.ok);
-    expect(config.pinMap[1], 21);
+    // 21 is the claw's second servo out of the box, so this takes a free one.
+    expect(config.assign(1, 22), AssignResult.ok);
+    expect(config.pinMap[1], 22);
 
     // The rest of the header is strapping pins, flash and the serial log.
     expect(config.assign(0, 99), AssignResult.notAllowed);
   });
 
-  test('a fifth joint takes channel 5 back from the claw mirror', () async {
+  test('a fifth joint is beyond what the camera can drive', () async {
     final config = await freshConfig();
-    expect(config.mirrorClaw, isTrue);
+    expect(config.trackingUsable, isTrue);
 
     config.resize(5);
 
-    // Channel 5 is a real servo now; mirroring the claw onto it would overwrite
-    // that joint on every command.
-    expect(config.mirrorClaw, isFalse);
-    // And the camera only ever yields four values, so it cannot drive this arm.
     expect(config.trackingUsable, isFalse);
+    // The claw keeps both its servos: the fifth joint is a channel of its own
+    // rather than something the claw was quietly borrowing.
+    expect(config.joints[3].twoServos, isTrue);
+    expect(config.servos, 6);
   });
 
   test('growing and shrinking keeps the joints that survive', () async {
@@ -51,12 +82,12 @@ void main() {
     config.resize(6);
     expect(config.channels, 6);
     expect(config.pinMap.first, 32, reason: 'an existing assignment was lost');
-    expect(
-      config.pinMap.sublist(4).every(allowedPins.contains),
-      isTrue,
-      reason: 'new joints should land on free pins',
-    );
-    expect(config.pinMap.toSet().length, 6, reason: 'two joints share a pin');
+
+    final taken = config.pinMap.where((p) => p != Joint.unassigned).toList();
+    expect(taken.every(allowedPins.contains), isTrue,
+        reason: 'a servo landed on a pin that cannot drive one');
+    expect(taken.toSet().length, taken.length,
+        reason: 'two servos share a pin');
 
     config.resize(3);
     expect(config.channels, 3);

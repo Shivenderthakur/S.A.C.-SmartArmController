@@ -9,7 +9,11 @@ import '../services/joint_config.dart';
 import '../widgets/glass.dart';
 import '../widgets/screen_body.dart';
 
-/// Wire the arm: drag a joint onto the pin it is plugged into.
+/// One servo: the joint it belongs to, and whether it is that joint's second,
+/// opposed one. A claw is two of these.
+typedef ServoRef = ({int channel, bool mirror});
+
+/// Wire the arm: drag a servo onto the pin it is plugged into.
 ///
 /// The board keeps no map of its own, so whatever is set here is pushed down
 /// the link on every connect.
@@ -38,12 +42,17 @@ class _BoardScreenState extends State<BoardScreen> {
   late final Future<BoardLayout> _layout =
       widget.layout == null ? BoardLayout.load() : Future.value(widget.layout);
 
-  /// The joint waiting for a pin, for people who would rather tap twice than
+  /// The servo waiting for a pin, for people who would rather tap twice than
   /// drag.
-  int? _armed;
+  ServoRef? _armed;
 
-  void _assign(int channel, int gpio) {
-    final result = widget.config.assign(channel, gpio);
+  void _say(String message) => ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(behavior: SnackBarBehavior.floating, content: Text(message)),
+      );
+
+  void _assign(ServoRef servo, int gpio) {
+    final result =
+        widget.config.assign(servo.channel, gpio, mirror: servo.mirror);
     setState(() => _armed = null);
 
     if (result == AssignResult.ok) {
@@ -53,12 +62,33 @@ class _BoardScreenState extends State<BoardScreen> {
     }
 
     final owner = widget.config.ownerOf(gpio);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      behavior: SnackBarBehavior.floating,
-      content: Text(result == AssignResult.taken && owner != null
-          ? 'GPIO$gpio already drives ${widget.config.joints[owner].name}'
-          : 'GPIO$gpio cannot drive a servo'),
-    ));
+    _say(result == AssignResult.taken && owner != null
+        ? 'GPIO$gpio already drives ${widget.config.joints[owner].name}'
+        : 'GPIO$gpio cannot drive a servo');
+  }
+
+  void _clear(ServoRef servo) {
+    widget.config.unassign(servo.channel, mirror: servo.mirror);
+    widget.link.pushMap();
+  }
+
+  /// Give a joint a second servo, or take it away. The new one lands on the
+  /// first free pin so it is wired rather than merely declared.
+  void _setTwoServos(int channel, bool on) {
+    widget.config.setTwoServos(channel, on);
+
+    // Wire it straight away if there is a spare pin; otherwise it waits in the
+    // list to be dragged onto one, like any other unwired servo.
+    if (on) {
+      final free = allowedPins.firstWhere(
+        (p) => widget.config.ownerOf(p) == null,
+        orElse: () => Joint.unassigned,
+      );
+      if (free != Joint.unassigned) {
+        widget.config.assign(channel, free, mirror: true);
+      }
+    }
+    widget.link.pushMap();
   }
 
   @override
@@ -77,12 +107,14 @@ class _BoardScreenState extends State<BoardScreen> {
             const SizedBox(height: 10),
             _DofPresets(config: config, onChanged: widget.link.pushMap),
             const SizedBox(height: 14),
-            const GlassLabel('Drag a joint onto the pin it is wired to'),
+            _TwoServoJoints(config: config, onChanged: _setTwoServos),
+            const SizedBox(height: 14),
+            const GlassLabel('Drag a servo onto the pin it is wired to'),
             _Unassigned(
               config: config,
               armed: _armed,
-              onArm: (channel) => setState(
-                () => _armed = _armed == channel ? null : channel,
+              onArm: (servo) => setState(
+                () => _armed = _armed == servo ? null : servo,
               ),
             ),
             const SizedBox(height: 14),
@@ -114,10 +146,7 @@ class _BoardScreenState extends State<BoardScreen> {
                   config: config,
                   armed: _armed,
                   onDrop: _assign,
-                  onClear: (channel) {
-                    config.unassign(channel);
-                    widget.link.pushMap();
-                  },
+                  onClear: _clear,
                 );
               },
             ),
@@ -161,9 +190,7 @@ class _JointCount extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  config.trackingUsable
-                      ? 'The camera can drive this arm'
-                      : 'Too many joints for the camera — sliders and steps only',
+                  '${config.servos} servos. ${config.trackingUsable ? "The camera can drive this arm" : "Too many joints for the camera — sliders and steps only"}',
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.35,
@@ -174,13 +201,15 @@ class _JointCount extends StatelessWidget {
             ),
           ),
           IconButton(
-            onPressed: config.channels > 1 ? () => resize(config.channels - 1) : null,
+            onPressed:
+                config.channels > 1 ? () => resize(config.channels - 1) : null,
             icon: const Icon(Icons.remove_circle_outline),
           ),
           Text('${config.channels}', style: monoStyle(size: 22, colour: accent)),
           IconButton(
-            onPressed:
-                config.channels < maxJoints ? () => resize(config.channels + 1) : null,
+            onPressed: config.channels < maxJoints
+                ? () => resize(config.channels + 1)
+                : null,
             icon: const Icon(Icons.add_circle_outline),
           ),
         ],
@@ -239,7 +268,58 @@ class _DofPresets extends StatelessWidget {
   }
 }
 
-/// The joints with nowhere to go yet.
+/// Which joints close with two servos facing each other.
+class _TwoServoJoints extends StatelessWidget {
+  const _TwoServoJoints({required this.config, required this.onChanged});
+
+  final JointConfig config;
+  final void Function(int channel, bool on) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.fromLTRB(18, 14, 10, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Two servos',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'A claw closes with a pair facing each other. The second one '
+            'follows the first at the opposite angle — one slider, two servos.',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.35,
+              color: context.glassMuted,
+            ),
+          ),
+          for (var i = 0; i < config.channels; i++)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    config.joints[i].name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13.5),
+                  ),
+                ),
+                Switch(
+                  value: config.joints[i].twoServos,
+                  onChanged: (v) => onChanged(i, v),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The servos with nowhere to go yet.
 class _Unassigned extends StatelessWidget {
   const _Unassigned({
     required this.config,
@@ -248,19 +328,22 @@ class _Unassigned extends StatelessWidget {
   });
 
   final JointConfig config;
-  final int? armed;
-  final ValueChanged<int> onArm;
+  final ServoRef? armed;
+  final ValueChanged<ServoRef> onArm;
 
   @override
   Widget build(BuildContext context) {
-    final loose = [
+    final loose = <ServoRef>[
       for (var i = 0; i < config.channels; i++)
-        if (!config.joints[i].assigned) i,
+        if (!config.joints[i].assigned) (channel: i, mirror: false),
+      for (var i = 0; i < config.channels; i++)
+        if (config.joints[i].twoServos && !config.joints[i].mirrorAssigned)
+          (channel: i, mirror: true),
     ];
 
     if (loose.isEmpty) {
       return Text(
-        'Every joint has a pin.',
+        'Every servo has a pin.',
         style: TextStyle(fontSize: 12, color: context.glassMuted),
       );
     }
@@ -269,27 +352,27 @@ class _Unassigned extends StatelessWidget {
       spacing: 8,
       runSpacing: 8,
       children: [
-        for (final channel in loose)
-          _JointChip(
-            channel: channel,
-            label: config.joints[channel].name,
-            armed: armed == channel,
-            onTap: () => onArm(channel),
+        for (final servo in loose)
+          _ServoChip(
+            servo: servo,
+            label: config.joints[servo.channel].name,
+            armed: armed == servo,
+            onTap: () => onArm(servo),
           ),
       ],
     );
   }
 }
 
-class _JointChip extends StatelessWidget {
-  const _JointChip({
-    required this.channel,
+class _ServoChip extends StatelessWidget {
+  const _ServoChip({
+    required this.servo,
     required this.label,
     required this.armed,
     this.onTap,
   });
 
-  final int channel;
+  final ServoRef servo;
   final String label;
   final bool armed;
   final VoidCallback? onTap;
@@ -308,10 +391,13 @@ class _JointChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('${channel + 1}', style: monoStyle(size: 12, colour: accent)),
+          Text(
+            '${servo.channel + 1}${servo.mirror ? "b" : ""}',
+            style: monoStyle(size: 12, colour: accent),
+          ),
           const SizedBox(width: 8),
           Text(
-            label,
+            servo.mirror ? '$label, 2nd' : label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -322,9 +408,12 @@ class _JointChip extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      child: Draggable<int>(
-        data: channel,
-        feedback: Material(color: Colors.transparent, child: Opacity(opacity: 0.9, child: chip)),
+      child: Draggable<ServoRef>(
+        data: servo,
+        feedback: Material(
+          color: Colors.transparent,
+          child: Opacity(opacity: 0.9, child: chip),
+        ),
         childWhenDragging: Opacity(opacity: 0.35, child: chip),
         child: chip,
       ),
@@ -348,9 +437,9 @@ class _Board extends StatelessWidget {
 
   final BoardLayout layout;
   final JointConfig config;
-  final int? armed;
-  final void Function(int channel, int gpio) onDrop;
-  final ValueChanged<int> onClear;
+  final ServoRef? armed;
+  final void Function(ServoRef servo, int gpio) onDrop;
+  final ValueChanged<ServoRef> onClear;
 
   static const _railWidth = 96.0;
   static const _blockHeight = 38.0;
@@ -370,7 +459,8 @@ class _Board extends StatelessWidget {
       builder: (context, constraints) {
         final boardWidth =
             (constraints.maxWidth - _railWidth * 2 - 16).clamp(70.0, 150.0);
-        final boardHeight = boardWidth * BoardLayout.heightMm / BoardLayout.widthMm;
+        final boardHeight =
+            boardWidth * BoardLayout.heightMm / BoardLayout.widthMm;
         final height = boardHeight.clamp(260.0, 460.0);
         final boardLeft = (constraints.maxWidth - boardWidth) / 2;
 
@@ -386,11 +476,17 @@ class _Board extends StatelessWidget {
                   painter: _LeaderLines(
                     left: [
                       for (var i = 0; i < left.length; i++)
-                        (blockCentre(i, left.length), left[i].y / BoardLayout.heightMm * height),
+                        (
+                          blockCentre(i, left.length),
+                          left[i].y / BoardLayout.heightMm * height,
+                        ),
                     ],
                     right: [
                       for (var i = 0; i < right.length; i++)
-                        (blockCentre(i, right.length), right[i].y / BoardLayout.heightMm * height),
+                        (
+                          blockCentre(i, right.length),
+                          right[i].y / BoardLayout.heightMm * height,
+                        ),
                     ],
                     boardLeft: boardLeft,
                     boardRight: boardLeft + boardWidth,
@@ -494,7 +590,7 @@ class _LeaderLines extends CustomPainter {
       old.left != left || old.right != right || old.colour != colour;
 }
 
-/// One pin: a drop target, and the joint that landed on it.
+/// One pin: a drop target, and the servo that landed on it.
 class _PinBlock extends StatelessWidget {
   const _PinBlock({
     required this.pin,
@@ -506,19 +602,20 @@ class _PinBlock extends StatelessWidget {
 
   final BoardPin pin;
   final JointConfig config;
-  final int? armed;
-  final void Function(int channel, int gpio) onDrop;
-  final ValueChanged<int> onClear;
+  final ServoRef? armed;
+  final void Function(ServoRef servo, int gpio) onDrop;
+  final ValueChanged<ServoRef> onClear;
 
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
     final owner = config.ownerOf(pin.gpio);
+    final mirror = config.isMirrorPin(pin.gpio);
     final taken = owner != null;
+    final here = taken ? (channel: owner, mirror: mirror) : null;
 
-    return DragTarget<int>(
-      onWillAcceptWithDetails: (details) =>
-          owner == null || owner == details.data,
+    return DragTarget<ServoRef>(
+      onWillAcceptWithDetails: (details) => here == null || here == details.data,
       onAcceptWithDetails: (details) => onDrop(details.data, pin.gpio),
       builder: (context, candidate, _) {
         final hot = candidate.isNotEmpty || (armed != null && !taken);
@@ -527,8 +624,8 @@ class _PinBlock extends StatelessWidget {
           onTap: () {
             if (armed != null) {
               onDrop(armed!, pin.gpio);
-            } else if (taken) {
-              onClear(owner);
+            } else if (here != null) {
+              onClear(here);
             }
           },
           child: Container(
@@ -548,11 +645,18 @@ class _PinBlock extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('GP${pin.label}', style: monoStyle(size: 11, colour: context.glassMuted)),
+                Text(
+                  'GP${pin.label}',
+                  style: monoStyle(size: 11, colour: context.glassMuted),
+                ),
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
-                    taken ? config.joints[owner].name : 'free',
+                    !taken
+                        ? 'free'
+                        : mirror
+                            ? '${config.joints[owner].name}, 2nd'
+                            : config.joints[owner].name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -581,7 +685,8 @@ class _Status extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mask = link.attachedMask;
-    final assigned = config.joints.where((j) => j.assigned).length;
+    final wired =
+        config.pinMap.where((p) => p != Joint.unassigned).length;
 
     final String state;
     if (!link.connected) {
@@ -589,12 +694,12 @@ class _Status extends StatelessWidget {
     } else if (mask == null) {
       state = 'Connected. Waiting for the board to confirm the map.';
     } else {
-      final attached = List.generate(config.channels, (i) => i)
+      final attached = List.generate(config.pinMap.length, (i) => i)
           .where((i) => mask & (1 << i) != 0)
           .length;
-      state = attached == assigned
+      state = attached == wired
           ? 'The board attached all $attached servos.'
-          : 'The board attached $attached of $assigned servos.';
+          : 'The board attached $attached of $wired servos.';
     }
 
     return Column(
@@ -604,7 +709,8 @@ class _Status extends StatelessWidget {
         GlassWell(
           child: Text(
             state,
-            style: TextStyle(fontSize: 12, height: 1.4, color: context.glassMuted),
+            style:
+                TextStyle(fontSize: 12, height: 1.4, color: context.glassMuted),
           ),
         ),
         const SizedBox(height: 12),
@@ -612,7 +718,8 @@ class _Status extends StatelessWidget {
           'Servos draw far more current than the board can supply: power them '
           'separately and tie the grounds together. GPIO16 and GPIO17 are wired '
           'to the memory on WROVER modules and cannot drive a servo there.',
-          style: TextStyle(fontSize: 12, height: 1.4, color: context.glassMuted),
+          style:
+              TextStyle(fontSize: 12, height: 1.4, color: context.glassMuted),
         ),
       ],
     );

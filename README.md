@@ -61,9 +61,9 @@ serial needs almost no rewriting. Up to nine channels can be driven — eight
 joints and a gripper — and which GPIO each one runs on is assigned on the app's
 **Board** screen and pushed to the board on every connect.
 
-On an arm of four joints or fewer, channel 5 carries the claw mirrored
-(`180 - angle`), for a gripper on two opposed servos, exactly as the desktop
-script did. A fifth joint takes that channel back and the mirror stops.
+A joint can drive two servos facing each other — which is how a claw closes.
+The second one is given `180 - angle` on a channel of its own, so it is one
+slider and one recorded angle on screen, and two servos on the wire.
 
 The socket is quicker — no handshake and no headers per command, so an angle
 lands in a millisecond or two rather than twenty or forty. What it costs is that

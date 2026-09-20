@@ -171,7 +171,6 @@ class _HomeShellState extends State<HomeShell>
   }
 
   void _pushJointConfig() {
-    _link.mirrorClaw = widget.joints.mirrorClaw;
     // The bar is shorter when Track is gone, and the pill must not be left on a
     // slot that no longer exists.
     _nav.count = _visibleScreens.length;

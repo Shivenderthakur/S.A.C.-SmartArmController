@@ -101,8 +101,7 @@ class _ControlScreenState extends State<ControlScreen> {
                   _Transport(
                     routine: routine,
                     player: widget.player,
-                    onRecord: () =>
-                        _use(widget.store.record(routine, widget.arm.angles)),
+                    onAdd: () => _addStep(routine),
                     onChanged: widget.store.replace,
                   ),
                   const SizedBox(height: 18),
@@ -118,8 +117,8 @@ class _ControlScreenState extends State<ControlScreen> {
               SliverToBoxAdapter(
                 child: GlassCard(
                   child: Text(
-                    'Put the arm where you want it with the sliders above, then '
-                    'press Record. A step remembers every joint at once.',
+                    'Press Add step: the sliders in front of you move the arm, '
+                    'and what you leave it at is the step.',
                     style: TextStyle(
                       fontSize: 12.5,
                       height: 1.45,
@@ -149,6 +148,141 @@ class _ControlScreenState extends State<ControlScreen> {
         );
       },
     );
+  }
+
+  /// Place the arm, then keep it.
+  ///
+  /// The sliders here are the live ones: they drive the servos as they move, so
+  /// the step is recorded from an arm that is already standing in the pose
+  /// rather than from numbers typed at it. One slider per joint, however many
+  /// this arm has - a claw's second servo follows its first and needs none.
+  Future<void> _addStep(ArmSequence routine) async {
+    final arm = widget.arm;
+    final before = List<int>.of(arm.angles);
+    final name = TextEditingController(
+      text: 'Step ${routine.steps.length + 1}',
+    );
+    var speed = 60;
+    var dwell = 400;
+    var kept = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheet) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            MediaQuery.viewInsetsOf(context).bottom + 20,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.86,
+            ),
+            child: GlassCard(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const GlassLabel('Place the arm'),
+                    Text(
+                      'These move the servos as you drag them. Leave the arm '
+                      'where the step should be.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.4,
+                        color: context.glassMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    for (var i = 0; i < arm.config.channels; i++) ...[
+                      _Channel(arm: arm, index: i),
+                      const SizedBox(height: 10),
+                    ],
+                    const SizedBox(height: 8),
+                    const GlassLabel('Name'),
+                    TextField(
+                      controller: name,
+                      decoration:
+                          const InputDecoration(border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 18),
+                    _Dial(
+                      label: 'Speed',
+                      value: '$speed deg/s',
+                      slider: ServoSlider(
+                        value: speed.toDouble(),
+                        min: ArmStep.minSpeed.toDouble(),
+                        max: ArmStep.maxSpeed.toDouble(),
+                        onChanged: (v) => setSheet(() => speed = v.round()),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _Dial(
+                      label: 'Hold here',
+                      value: '${(dwell / 1000).toStringAsFixed(1)} s',
+                      slider: ServoSlider(
+                        value: dwell.toDouble(),
+                        min: 0,
+                        max: 5000,
+                        onChanged: (v) => setSheet(() => dwell = v.round()),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GlassButton(
+                            label: 'Cancel',
+                            icon: Icons.close,
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: GlassButton(
+                            label: 'Save step',
+                            icon: Icons.check,
+                            filled: true,
+                            onPressed: () {
+                              kept = true;
+                              Navigator.of(context).pop();
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (kept) {
+      var next = widget.store.record(routine, arm.angles);
+      final added = next.steps.last;
+      next = widget.store.replaceStep(
+        next,
+        added.copyWith(
+          name: name.text.trim().isEmpty ? added.name : name.text.trim(),
+          speed: speed,
+          dwell: Duration(milliseconds: dwell),
+        ),
+      );
+      _use(next);
+    } else {
+      // Cancelled: put the arm back where it was rather than leaving it
+      // wherever the sliders were abandoned.
+      arm.setPose(before);
+    }
+    name.dispose();
   }
 
   Future<void> _edit(ArmSequence routine, ArmStep step) async {
@@ -447,13 +581,13 @@ class _Transport extends StatelessWidget {
   const _Transport({
     required this.routine,
     required this.player,
-    required this.onRecord,
+    required this.onAdd,
     required this.onChanged,
   });
 
   final ArmSequence routine;
   final SequencePlayer player;
-  final VoidCallback onRecord;
+  final VoidCallback onAdd;
   final ValueChanged<ArmSequence> onChanged;
 
   @override
@@ -468,9 +602,9 @@ class _Transport extends StatelessWidget {
             children: [
               Expanded(
                 child: GlassButton(
-                  label: 'Record',
-                  icon: Icons.fiber_manual_record_outlined,
-                  onPressed: playing ? null : onRecord,
+                  label: 'Add step',
+                  icon: Icons.add_circle_outline,
+                  onPressed: playing ? null : onAdd,
                 ),
               ),
               const SizedBox(width: 12),

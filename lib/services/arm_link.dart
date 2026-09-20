@@ -119,16 +119,16 @@ class ArmLink extends ChangeNotifier {
   bool get _wantsSocket =>
       _enabled && _transport == ArmTransport.tcp && _host.isNotEmpty;
 
-  /// [mirrorClaw] appends channel 5 as the opposite of channel 4, for a gripper
-  /// built from two opposed servos. It is only safe on an arm of four joints or
-  /// fewer: past that, channel 5 is a real servo and its own mirror would
-  /// overwrite it on every command.
-  static String command(List<int> angles, {bool mirrorClaw = false}) {
+  /// One `channel,angle;` pair per servo, numbered against the pin map.
+  ///
+  /// The link knows nothing about joints or claws: what arrives here is already
+  /// one angle per servo, mirrored halves included, in the same order as the
+  /// map that was pushed.
+  static String command(List<int> angles) {
     final b = StringBuffer();
     for (var i = 0; i < angles.length; i++) {
       b.write('${i + 1},${angles[i]};');
     }
-    if (mirrorClaw && angles.length == 4) b.write('5,${180 - angles[3]};');
     return b.toString();
   }
 
@@ -145,9 +145,6 @@ class ArmLink extends ChangeNotifier {
   /// Where the pin map comes from. The board keeps it in RAM only, so the link
   /// pushes it on every connect and again whenever the board says it has none.
   List<int> Function()? mapProvider;
-
-  /// Whether to mirror the claw onto channel 5 — set from the joint config.
-  bool mirrorClaw = false;
 
   /// The channels the board reported as attached, as a bitmask, or null before
   /// it has answered.
@@ -330,7 +327,7 @@ class ArmLink extends ChangeNotifier {
 
     _inFlight = true;
     try {
-      socket.write('${command(angles, mirrorClaw: mirrorClaw)}\n');
+      socket.write('${command(angles)}\n');
       // Gate the next command on this one actually leaving. `Socket.add` will
       // otherwise buffer in memory without complaint, and a backlog of stale
       // angles is worse than no angles at all.
@@ -406,7 +403,7 @@ class ArmLink extends ChangeNotifier {
 
     try {
       final request = await _client
-          .getUrl(_uri(command(angles, mirrorClaw: mirrorClaw)))
+          .getUrl(_uri(command(angles)))
           .timeout(const Duration(seconds: 2));
       final response = await request.close().timeout(const Duration(seconds: 2));
       await response.drain<void>();

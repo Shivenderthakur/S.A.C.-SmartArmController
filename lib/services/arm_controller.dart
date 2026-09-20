@@ -89,8 +89,10 @@ class ArmController extends ChangeNotifier {
     if (listEquals(next, _angles)) return;
     _angles = next;
     anglesListenable.value = next;
+    // One angle per joint on screen, one per servo on the wire: a claw's second
+    // servo is the opposite of its first, and the config knows which are which.
     // The desktop script only wrote to the port when a value changed.
-    link.send(next);
+    link.send(config.wireAngles(next));
     notifyListeners();
   }
 

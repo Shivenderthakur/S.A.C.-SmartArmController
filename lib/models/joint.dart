@@ -17,6 +17,8 @@ class Joint {
     required this.max,
     required this.rest,
     this.gpio = unassigned,
+    this.twoServos = false,
+    this.mirrorGpio = unassigned,
     this.source,
   });
 
@@ -27,21 +29,45 @@ class Joint {
   final int max;
   final int rest;
 
-  /// The GPIO this channel drives, or [unassigned].
+  /// The GPIO this joint drives, or [unassigned].
   final int gpio;
+
+  /// Whether this joint closes with a pair of servos facing each other, the way
+  /// a claw does. The second one is given `180 - angle` on a channel of its
+  /// own: one slider, one recorded angle, two servos.
+  ///
+  /// Deliberately separate from [mirrorGpio]. Having a second servo is a fact
+  /// about the arm; which pin it is plugged into is a wiring detail that can be
+  /// unset, exactly like the first one.
+  final bool twoServos;
+
+  /// The second servo's pin, or [unassigned] when it is not wired yet.
+  final int mirrorGpio;
 
   /// Which tracked value drives this joint, if any.
   final TrackSource? source;
 
   bool get assigned => gpio != unassigned;
+  bool get mirrorAssigned => twoServos && mirrorGpio != unassigned;
 
-  Joint copyWith({String? name, int? min, int? max, int? rest, int? gpio, Object? source = _keep}) =>
+  Joint copyWith({
+    String? name,
+    int? min,
+    int? max,
+    int? rest,
+    int? gpio,
+    bool? twoServos,
+    int? mirrorGpio,
+    Object? source = _keep,
+  }) =>
       Joint(
         name: name ?? this.name,
         min: min ?? this.min,
         max: max ?? this.max,
         rest: rest ?? this.rest,
         gpio: gpio ?? this.gpio,
+        twoServos: twoServos ?? this.twoServos,
+        mirrorGpio: mirrorGpio ?? this.mirrorGpio,
         source: identical(source, _keep) ? this.source : source as TrackSource?,
       );
 
@@ -51,17 +77,23 @@ class Joint {
         'max': max,
         'rest': rest,
         'gpio': gpio,
+        'two_servos': twoServos,
+        'mirror_gpio': mirrorGpio,
         'source': source?.name,
       };
 
   static Joint fromJson(Map<String, Object?> json) {
     final raw = json['source'] as String?;
+    final mirrorGpio = json['mirror_gpio'] as int? ?? unassigned;
     return Joint(
       name: json['name'] as String? ?? 'Joint',
       min: json['min'] as int? ?? 0,
       max: json['max'] as int? ?? 180,
       rest: json['rest'] as int? ?? 90,
       gpio: json['gpio'] as int? ?? unassigned,
+      // Older entries only knew about the pin.
+      twoServos: json['two_servos'] as bool? ?? mirrorGpio != unassigned,
+      mirrorGpio: mirrorGpio,
       source: TrackSource.values.where((s) => s.name == raw).firstOrNull,
     );
   }
@@ -78,8 +110,10 @@ const allowedPins = [16, 17, 18, 19, 21, 22, 23, 32, 33];
 /// have: 8 of arm plus a gripper.
 final maxJoints = allowedPins.length;
 
-/// The arm the app has always driven: three tracked joints and a claw, on the
-/// first four pins.
+/// The arm the app has always driven: three tracked joints and a claw.
+///
+/// The claw is two servos from the start, because that is how the arm is
+/// built - one on GPIO19 and its opposite number on GPIO21.
 const defaultJoints = [
   Joint(name: 'X (base)', min: xMin, max: xMax, rest: xMid, gpio: 16, source: TrackSource.base),
   Joint(name: 'Y (lift)', min: yMin, max: yMax, rest: yMid, gpio: 17, source: TrackSource.lift),
@@ -90,6 +124,8 @@ const defaultJoints = [
     max: clawOpenAngle,
     rest: clawOpenAngle,
     gpio: 19,
+    twoServos: true,
+    mirrorGpio: 21,
     source: TrackSource.claw,
   ),
 ];
