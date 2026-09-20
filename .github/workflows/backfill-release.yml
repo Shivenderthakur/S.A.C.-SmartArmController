@@ -1,13 +1,12 @@
 name: Backfill release
 
-# Publishes an older version as a proper, signed release.
+# Publishes an older version as a proper release.
 #
 # The release job in ci.yml only ever publishes the version currently in
 # pubspec.yaml, and the workflow that shipped alongside v1 and v2 named its
-# artifacts after the CI run number and signed them with a throwaway debug key.
-# This workflow runs from main - so it uses today's naming and today's signing -
-# but checks out the old commit, so the APK is built from the source that
-# version actually shipped.
+# artifacts after the CI run number. This workflow runs from main - so it uses
+# today's naming and today's signing - but checks out the old commit, so the
+# APK is built from the source that version actually shipped.
 #
 # Run it from Actions -> Backfill release -> Run workflow, giving a tag or a
 # commit SHA.
@@ -88,9 +87,11 @@ jobs:
 
       - run: flutter pub get
 
-      # A backfilled release exists to be installable over the others, so an
-      # unsigned build is a failure here rather than a warning.
+      # Without the secrets the build falls back to the runner's debug key.
+      # That still publishes, but the runner makes a new debug key every run,
+      # so no two releases can be installed over each other.
       - name: Set up the release signing key
+        id: signing
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -104,9 +105,10 @@ jobs:
           if [ -z "$KEY_PASSWORD" ]; then missing="$missing ANDROID_KEY_PASSWORD"; fi
 
           if [ -n "$missing" ]; then
-            echo "::error::cannot backfill a signed release. Empty here:$missing"
-            echo "::error::They must be Repository secrets on this repository, under the Actions tab of Settings -> Secrets and variables - not Dependabot, not Codespaces, and not an Environment secret (no job here declares an environment)."
-            exit 1
+            echo "::warning::Not signing. Empty here:$missing"
+            echo "::warning::This APK gets the runner's throwaway debug key, so it cannot be installed over another version. To fix it, add these as Repository secrets on this repository, under the Actions tab of Settings -> Secrets and variables - not Dependabot, not Codespaces, and not an Environment secret."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           # Present but malformed is worse than absent: it would produce a
@@ -122,10 +124,12 @@ jobs:
 
           printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
             "$RUNNER_TEMP/release.jks" "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > android/key.properties
+          echo "signed=true" >> "$GITHUB_OUTPUT"
 
       # v1 and v2 predate the signing wiring: their build.gradle.kts always
-      # selects the debug key, so without this the APK would be debug-signed
-      # and every step would still report success.
+      # selects the debug key. With key.properties present this makes them use
+      # it; with no secrets the patched code finds no keystore and falls back
+      # to debug on its own, so it is safe either way.
       - name: Make the old build config read the release key
         run: python3 .backfill/tools/enable_release_signing.py android/app/build.gradle.kts
 
@@ -142,9 +146,10 @@ jobs:
           cp build/app/outputs/flutter-apk/app-release.apk "$APK"
 
       # Proof, not assumption: compare the APK's signing certificate against
-      # the keystore's own fingerprint. A debug-signed APK fails here rather
-      # than reaching the releases page.
+      # the keystore's own fingerprint. Only meaningful when there is a
+      # keystore to compare against.
       - name: Verify the APK carries the release key
+        if: steps.signing.outputs.signed == 'true'
         env:
           APK: ${{ steps.version.outputs.apk }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -177,11 +182,19 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           APK: ${{ steps.version.outputs.apk }}
           SHA: ${{ steps.version.outputs.sha }}
+          SIGNED: ${{ steps.signing.outputs.signed }}
           PRERELEASE: ${{ inputs.prerelease }}
         run: |
           TAG="v$VERSION"
           FLAGS=""
           [ "$PRERELEASE" = true ] && FLAGS="--prerelease"
+
+          NOTES="Built from \`$SHA\`, the commit this version shipped at."
+          if [ "$SIGNED" != true ]; then
+            NOTES="$NOTES
+
+          Signed with a debug key rather than a release key, so uninstall any other version before installing this one."
+          fi
 
           # The release may already exist from a previous attempt; replace the
           # asset rather than failing the run.
@@ -192,6 +205,6 @@ jobs:
             gh release create "$TAG" "$APK" \
               --target "$SHA" \
               --title "$TAG" \
-              --notes "Built from \`$SHA\`, the commit this version shipped at." \
+              --notes "$NOTES" \
               $FLAGS
           fi
