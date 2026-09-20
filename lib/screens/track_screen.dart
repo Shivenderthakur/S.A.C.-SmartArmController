@@ -89,9 +89,9 @@ class TrackScreen extends StatelessWidget {
               ListenableBuilder(
                 listenable: arm,
                 builder: (context, _) => GlassButton(
-                  label: arm.manual
-                      ? 'Manual — the sliders drive the arm'
-                      : 'Auto — your hand drives the arm',
+                  // Short enough to survive a large text size: GlassButton is a
+                  // fixed height and ellipsises rather than wrapping.
+                  label: arm.manual ? 'Manual control' : 'Hand tracking',
                   icon: arm.manual ? Icons.pan_tool_outlined : Icons.back_hand,
                   filled: !arm.manual,
                   onPressed: () => arm.manual = !arm.manual,

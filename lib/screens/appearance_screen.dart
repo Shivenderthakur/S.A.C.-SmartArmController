@@ -46,8 +46,12 @@ class AppearanceScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                // Wrapped, not a Row: five swatches plus their labels fill the
+                // width at the default text size and overflow past it.
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  spacing: 4,
+                  runSpacing: 12,
                   children: [
                     for (var i = 0; i < AppSettings.accents.length; i++)
                       _Swatch(
@@ -211,8 +215,8 @@ class AboutTile extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'On-device MediaPipe hand tracking, driving four servos over the '
-            'local network. Nothing leaves your WiFi.',
+            'On-device MediaPipe hand tracking, driving up to nine servos over '
+            'the local network. Nothing leaves your WiFi.',
             style: TextStyle(
               fontSize: 12,
               height: 1.45,

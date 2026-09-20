@@ -126,9 +126,9 @@ with a click of haptic feedback at each boundary.
 
 | screen | what |
 | --- | --- |
-| **Track** | Camera, hand skeleton, live angles, frame rate. Flip camera, mirror, and an Auto/Manual switch. |
-| **Control** | Drive each servo by hand with sliders, and see the exact command string being sent. |
-| **Board** | The ESP32 drawing. Drag a joint onto the pin it is wired to, and set how many joints the arm has. |
+| **Track** | Camera, hand skeleton, live angles, frame rate. Flip camera, mirror, and an Auto/Manual switch. Leaves the bar entirely on an arm of more than four joints, which is more than the camera can drive. |
+| **Control** | Drive each joint by hand, one slider each. |
+| **Board** | The ESP32 drawing. Drag a joint onto the pin it is wired to, and pick how many joints the arm has — 4 to 9 DOF. |
 | **Arm** | ESP32 address, connection test, the send switch, and the rate limit. |
 | **Theme** | Light, dark or follow the system; five accents, applied instantly. |
 

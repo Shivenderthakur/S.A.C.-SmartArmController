@@ -12,10 +12,14 @@ import 'package:flutter/services.dart';
 class SlideSelection extends ChangeNotifier {
   SlideSelection({
     required TickerProvider vsync,
-    required this.count,
+    required int count,
     this.onChanged,
     int initial = 0,
-  })  : _anim = AnimationController.unbounded(
+    // A named parameter cannot be private, so the formal cannot initialise
+    // _count directly.
+    // ignore: prefer_initializing_formals
+  })  : _count = count,
+        _anim = AnimationController.unbounded(
           vsync: vsync,
           value: initial.toDouble(),
         ),
@@ -27,9 +31,25 @@ class SlideSelection extends ChangeNotifier {
   static final _spring =
       SpringDescription.withDampingRatio(mass: 1, stiffness: 420, ratio: 1);
 
-  final int count;
   final ValueChanged<int>? onChanged;
   final AnimationController _anim;
+
+  int _count;
+
+  /// How many destinations there are. The nav bar loses one when the arm grows
+  /// past what hand tracking can drive, so this changes while the control is
+  /// alive — and the pill must not be left sitting on a slot that no longer
+  /// exists.
+  int get count => _count;
+  set count(int next) {
+    if (next < 1 || next == _count) return;
+    _count = next;
+
+    final last = (next - 1).toDouble();
+    if (position > last) _anim.value = last;
+    if (_detent > next - 1) _detent = next - 1;
+    notifyListeners();
+  }
 
   bool _dragging = false;
   int _detent;

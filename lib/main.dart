@@ -68,6 +68,13 @@ class SmartArmApp extends StatelessWidget {
         return MaterialApp(
           title: 'Smart Arm',
           debugShowCheckedModeBanner: false,
+          // The buttons and the nav bar are fixed heights that ellipsise rather
+          // than wrap, so a very large system text size is clamped instead of
+          // clipping labels.
+          builder: (context, child) => MediaQuery.withClampedTextScaling(
+            maxScaleFactor: 1.3,
+            child: child!,
+          ),
           themeMode: settings.themeMode,
           theme: theme(Brightness.light),
           darkTheme: theme(Brightness.dark),
@@ -90,6 +97,8 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell>
     with WidgetsBindingObserver, TickerProviderStateMixin {
+  static const _trackIndex = 0;
+
   static const _destinations = [
     NavDestination(Icons.back_hand_outlined, 'Track'),
     NavDestination(Icons.tune, 'Control'),
@@ -136,6 +145,9 @@ class _HomeShellState extends State<HomeShell>
 
   void _pushJointConfig() {
     _link.mirrorClaw = widget.joints.mirrorClaw;
+    // The bar is shorter when Track is gone, and the pill must not be left on a
+    // slot that no longer exists.
+    _nav.count = _visibleScreens.length;
   }
 
   void _pushLinkSettings() {
@@ -170,10 +182,20 @@ class _HomeShellState extends State<HomeShell>
     }
   }
 
-  ScreenTint get _tint {
-    final p = _nav.position.clamp(0.0, _tints.length - 1.0);
-    final i = p.floor().clamp(0, _tints.length - 2);
-    return ScreenTint.lerp(_tints[i], _tints[i + 1], p - i);
+  /// Which screens can be reached right now.
+  ///
+  /// Hand tracking yields three joints and a claw and nothing more, so on a
+  /// bigger arm the Track tab leaves the bar and its screen cannot be opened.
+  /// Every other control keeps working, and shrinking the arm brings it back.
+  List<int> get _visibleScreens => [
+        for (var i = 0; i < _destinations.length; i++)
+          if (i != _trackIndex || widget.joints.trackingUsable) i,
+      ];
+
+  ScreenTint _tintOf(List<ScreenTint> tints) {
+    final p = _nav.position.clamp(0.0, tints.length - 1.0);
+    final i = p.floor().clamp(0, tints.length - 2);
+    return ScreenTint.lerp(tints[i], tints[i + 1], p - i);
   }
 
   @override
@@ -182,7 +204,7 @@ class _HomeShellState extends State<HomeShell>
     final dark = Theme.of(context).brightness == Brightness.dark;
     final pill = _LinkPill(link: _link, settings: settings);
 
-    final screens = [
+    final all = [
       TrackScreen(
         tracker: _tracker,
         arm: _arm,
@@ -199,6 +221,11 @@ class _HomeShellState extends State<HomeShell>
       ),
       AppearanceScreen(settings: settings, trailing: pill),
     ];
+
+    final visible = _visibleScreens;
+    final destinations = [for (final i in visible) _destinations[i]];
+    final tints = [for (final i in visible) _tints[i]];
+    final screens = [for (final i in visible) all[i]];
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
@@ -217,7 +244,7 @@ class _HomeShellState extends State<HomeShell>
             Positioned.fill(
               child: AnimatedBuilder(
                 animation: _nav,
-                builder: (context, _) => AmbientBackground(tint: _tint),
+                builder: (context, _) => AmbientBackground(tint: _tintOf(tints)),
               ),
             ),
             for (var i = 0; i < screens.length; i++)
@@ -229,7 +256,7 @@ class _HomeShellState extends State<HomeShell>
               child: ListenableBuilder(
                 listenable: settings,
                 builder: (context, _) => SlideNavBar(
-                  destinations: _destinations,
+                  destinations: destinations,
                   selection: _nav,
                   accent: settings.accentColor,
                 ),

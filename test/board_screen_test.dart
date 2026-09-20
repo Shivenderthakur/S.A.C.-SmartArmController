@@ -7,7 +7,7 @@ import 'package:smart_arm_controller/services/arm_link.dart';
 import 'package:smart_arm_controller/services/joint_config.dart';
 
 /// Pumps the Board screen with a five-joint arm whose first joint has no pin.
-Future<JointConfig> pumpBoard(WidgetTester tester) async {
+Future<JointConfig> pumpBoard(WidgetTester tester, {double textScale = 1}) async {
   // Tall enough for the board and both pin rails to be laid out at once.
   tester.view.physicalSize = const Size(1200, 3000);
   tester.view.devicePixelRatio = 2;
@@ -29,8 +29,12 @@ Future<JointConfig> pumpBoard(WidgetTester tester) async {
   // A Scaffold, because refusing a drop raises a SnackBar and ScaffoldMessenger
   // needs one to present into — in the app the screen sits inside HomeShell's.
   await tester.pumpWidget(MaterialApp(
-    home: Scaffold(
-      body: BoardScreen(config: config, link: link, layout: layout),
+    home: MediaQuery.withClampedTextScaling(
+      minScaleFactor: textScale,
+      maxScaleFactor: textScale,
+      child: Scaffold(
+        body: BoardScreen(config: config, link: link, layout: layout),
+      ),
     ),
   ));
   await tester.pump();
@@ -58,6 +62,16 @@ void main() {
     // And nothing for the pins that cannot drive a servo.
     expect(find.text('GP0'), findsNothing);
     expect(find.text('GP5'), findsNothing);
+  });
+
+  testWidgets('lays out at the largest text size the app allows',
+      (tester) async {
+    await pumpBoard(tester, textScale: 1.3);
+
+    // An overflowing Row or Column throws, and the test framework hands it over
+    // here rather than failing on its own.
+    expect(tester.takeException(), isNull);
+    expect(find.text('GP16'), findsOneWidget);
   });
 
   testWidgets('a loose joint can be tapped onto a free pin', (tester) async {
