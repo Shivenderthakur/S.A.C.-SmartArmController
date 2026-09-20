@@ -56,7 +56,7 @@ class TrackScreen extends StatelessWidget {
               ),
             ],
           TrackerStage.running => [
-              _Preview(tracker: tracker, arm: arm, settings: settings),
+              _Preview(tracker: tracker, settings: settings),
               const SizedBox(height: 14),
               _Angles(arm: arm),
               const SizedBox(height: 14),
@@ -90,8 +90,10 @@ class TrackScreen extends StatelessWidget {
                 listenable: arm,
                 builder: (context, _) => GlassButton(
                   // Short enough to survive a large text size: GlassButton is a
-                  // fixed height and ellipsises rather than wrapping.
-                  label: arm.manual ? 'Manual control' : 'Hand tracking',
+                  // fixed height and ellipsises rather than wrapping. It says
+                  // which mode is on rather than leaving it to be read off a
+                  // switch position.
+                  label: arm.manual ? 'Manual control' : 'AI mode · ON',
                   icon: arm.manual ? Icons.pan_tool_outlined : Icons.back_hand,
                   filled: !arm.manual,
                   onPressed: () => arm.manual = !arm.manual,
@@ -105,14 +107,9 @@ class TrackScreen extends StatelessWidget {
 }
 
 class _Preview extends StatelessWidget {
-  const _Preview({
-    required this.tracker,
-    required this.arm,
-    required this.settings,
-  });
+  const _Preview({required this.tracker, required this.settings});
 
   final Tracker tracker;
-  final ArmController arm;
   final AppSettings settings;
 
   @override
@@ -148,7 +145,6 @@ class _Preview extends StatelessWidget {
                           child: CustomPaint(
                             painter: HandPainter(
                               hand: tracker.hand,
-                              angles: arm.anglesListenable,
                               mirror: settings.mirrorOverlay,
                               accent: settings.accentColor,
                             ),

@@ -11,13 +11,11 @@ import '../models/hand.dart';
 class HandPainter extends CustomPainter {
   HandPainter({
     required this.hand,
-    required this.angles,
     required this.mirror,
     required this.accent,
-  }) : super(repaint: Listenable.merge([hand, angles]));
+  }) : super(repaint: hand);
 
   final ValueListenable<Hand?> hand;
-  final ValueListenable<List<int>> angles;
   final bool mirror;
   final Color accent;
 

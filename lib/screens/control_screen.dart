@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../services/arm_controller.dart';
 import '../widgets/glass.dart';
+import '../widgets/joint_slider.dart';
 import '../widgets/screen_body.dart';
-import '../widgets/servo_slider.dart';
 
-/// Drive the arm by hand, without the camera.
+/// Drive the arm by hand, one slider per joint.
 ///
 /// Touching a slider switches the arm to manual, because otherwise the next
-/// tracked frame would overwrite whatever was just set.
+/// tracked frame would overwrite whatever was just set. Recording these poses
+/// into a routine is the Steps screen.
 class ControlScreen extends StatelessWidget {
   const ControlScreen({super.key, required this.arm, this.trailing});
 
@@ -18,56 +19,16 @@ class ControlScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: arm,
+      listenable: arm.config,
       builder: (context, _) => ScreenBody(
         kicker: 'Manual',
         title: 'Custom control',
         trailing: trailing,
         children: [
-          GlassCard(
-            padding: const EdgeInsets.fromLTRB(18, 14, 14, 14),
-            child: Row(
-              children: [
-                Icon(
-                  arm.manual ? Icons.pan_tool : Icons.waving_hand_outlined,
-                  size: 22,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        arm.manual ? 'Manual control' : 'Hand tracking',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        arm.manual
-                            ? 'The sliders drive the arm. Tracking still runs '
-                                'but is ignored.'
-                            : 'The camera drives the arm. Move a slider to '
-                                'take over.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          height: 1.35,
-                          color: context.glassMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Switch(value: arm.manual, onChanged: (v) => arm.manual = v),
-              ],
-            ),
-          ),
+          _Mode(arm: arm),
           const SizedBox(height: 12),
           for (var i = 0; i < arm.config.channels; i++) ...[
-            _Channel(arm: arm, index: i),
+            JointSlider(arm: arm, index: i),
             const SizedBox(height: 12),
           ],
           const SizedBox(height: 2),
@@ -82,11 +43,15 @@ class ControlScreen extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: GlassButton(
-                  label: 'Back to hand',
-                  icon: Icons.videocam_outlined,
-                  filled: true,
-                  onPressed: () => arm.manual = false,
+                child: ListenableBuilder(
+                  listenable: arm,
+                  builder: (context, _) => GlassButton(
+                    label: 'Back to hand',
+                    icon: Icons.videocam_outlined,
+                    onPressed: arm.config.trackingUsable && arm.manual
+                        ? () => arm.manual = false
+                        : null,
+                  ),
                 ),
               ),
             ],
@@ -97,65 +62,101 @@ class ControlScreen extends StatelessWidget {
   }
 }
 
-class _Channel extends StatelessWidget {
-  const _Channel({required this.arm, required this.index});
+/// Whether the sliders or the camera are driving, and why.
+class _Mode extends StatelessWidget {
+  const _Mode({required this.arm});
 
   final ArmController arm;
-  final int index;
 
   @override
   Widget build(BuildContext context) {
-    final joint = arm.config.joints[index];
-    final (min, max) = (joint.min, joint.max);
-    final accent = Theme.of(context).colorScheme.primary;
+    return ListenableBuilder(
+      listenable: arm,
+      builder: (context, _) {
+        final tracked = arm.config.trackingUsable;
+        final ai = tracked && !arm.manual;
+        final accent = Theme.of(context).colorScheme.primary;
 
-    return GlassCard(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+        return GlassCard(
+          padding: const EdgeInsets.fromLTRB(18, 14, 14, 14),
+          child: Row(
             children: [
+              Icon(
+                ai ? Icons.auto_awesome : Icons.pan_tool,
+                size: 22,
+                color: accent,
+              ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      joint.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          ai ? 'AI mode' : 'Manual control',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (ai) ...[
+                          const SizedBox(width: 8),
+                          _OnBadge(colour: accent),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '$min to $max degrees',
+                      !tracked
+                          ? 'This arm has more joints than the camera can '
+                              'drive, so the sliders are how it moves.'
+                          : ai
+                              ? 'Your hand is driving the arm. Move a slider to '
+                                  'take over.'
+                              : 'The sliders drive the arm. Tracking still runs '
+                                  'but is ignored.',
                       style: TextStyle(
                         fontSize: 12,
+                        height: 1.35,
                         color: context.glassMuted,
                       ),
                     ),
                   ],
                 ),
               ),
-              Text(
-                '${arm.angles[index]}',
-                style: monoStyle(size: 26, colour: accent),
-              ),
+              if (tracked)
+                Switch(value: arm.manual, onChanged: (v) => arm.manual = v),
             ],
           ),
-          const SizedBox(height: 12),
-          ServoSlider(
-            value: arm.angles[index].toDouble(),
-            min: min.toDouble(),
-            max: max.toDouble(),
-            onChanged: (v) => arm.setChannel(index, v.round()),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
+}
+
+/// The little "on" tag beside AI mode, so it is never a guess.
+class _OnBadge extends StatelessWidget {
+  const _OnBadge({required this.colour});
+
+  final Color colour;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: colour.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: colour.withValues(alpha: 0.4)),
+        ),
+        child: Text(
+          'ON',
+          style: TextStyle(
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.8,
+            color: colour,
+          ),
+        ),
+      );
 }

@@ -96,7 +96,11 @@ Two kinds of line arrive. **Angles** are `channel,angle;` pairs, channels
 1,115;2,95;3,108;4,60;
 ```
 
-**The pin map** is one line of `M,<channel>,<gpio>;` tokens, `-1` for a joint
+A channel is one servo, not one joint: a claw built from two opposed servos
+sends both, the second carrying `180 - angle`. The app decides which channel is
+which and tells the board in the map.
+
+**The pin map** is one line of `M,<channel>,<gpio>;` tokens, `-1` for a channel
 with no pin, answered `map,<hex mask>;` naming the channels that actually
 attached:
 

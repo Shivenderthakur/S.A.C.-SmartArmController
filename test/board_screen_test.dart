@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_arm_controller/models/board.dart';
+import 'package:smart_arm_controller/models/joint.dart';
 import 'package:smart_arm_controller/screens/board_screen.dart';
 import 'package:smart_arm_controller/services/arm_link.dart';
 import 'package:smart_arm_controller/services/joint_config.dart';
@@ -50,6 +51,21 @@ Future<void> tapText(WidgetTester tester, String text) async {
   await tester.pump();
 }
 
+/// A joint's name is on its chip and again in the two-servo list, so a bare
+/// find.text arms nothing - and the next tap on a pin then reads as "clear this
+/// one" rather than "put that servo here".
+Future<void> tapChip(WidgetTester tester, String name) async {
+  final finder = find.descendant(
+    of: find.byType(Draggable<ServoRef>),
+    matching: find.text(name),
+  );
+  expect(finder, findsWidgets, reason: 'no servo chip reads "$name"');
+  await tester.ensureVisible(finder.first);
+  await tester.pump();
+  await tester.tap(finder.first);
+  await tester.pump();
+}
+
 void main() {
   testWidgets('shows a block for every pin that can carry a servo',
       (tester) async {
@@ -76,11 +92,39 @@ void main() {
 
   testWidgets('a loose joint can be tapped onto a free pin', (tester) async {
     final config = await pumpBoard(tester);
+    // Whichever pin is actually spare: the claw takes two, so which one that is
+    // depends on the arm.
+    final free = allowedPins.firstWhere((p) => config.ownerOf(p) == null);
 
-    await tapText(tester, config.joints[0].name);
-    await tapText(tester, 'GP22');
+    await tapChip(tester, config.joints[0].name);
+    await tapText(tester, 'GP$free');
 
-    expect(config.joints[0].gpio, 22);
+    expect(config.joints[0].gpio, free);
+  });
+
+  testWidgets('a claw offers its second servo once it has two', (tester) async {
+    final config = await pumpBoard(tester);
+    final claw = config.joints.indexWhere((j) => j.twoServos);
+    expect(claw, isNot(-1), reason: 'the default arm should have a two-servo claw');
+
+    final name = config.joints[claw].name;
+    final chips = find.descendant(
+      of: find.byType(Draggable<ServoRef>),
+      matching: find.textContaining(name),
+    );
+
+    // Only loose servos get a chip, so freeing the second pin offers exactly
+    // that half - the first is still wired.
+    config.unassign(claw, mirror: true);
+    await tester.pump();
+    expect(chips, findsOneWidget);
+    expect(find.text('$name, 2nd'), findsOneWidget);
+
+    // Free the other half and the claw offers both, as two separate servos.
+    config.unassign(claw);
+    await tester.pump();
+    expect(chips, findsNWidgets(2));
+    expect(find.text(name), findsWidgets);
   });
 
   testWidgets('a pin that already drives a joint refuses another',
@@ -88,7 +132,7 @@ void main() {
     final config = await pumpBoard(tester);
     final taken = config.joints[1].gpio;
 
-    await tapText(tester, config.joints[0].name);
+    await tapChip(tester, config.joints[0].name);
     await tapText(tester, 'GP$taken');
 
     expect(config.joints[0].assigned, isFalse,

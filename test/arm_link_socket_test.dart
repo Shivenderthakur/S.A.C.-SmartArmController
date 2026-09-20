@@ -110,18 +110,16 @@ void main() {
     expect(link.reconnects, 0);
   });
 
-  test('mirrors the claw onto channel 5 only when asked', () {
+  test('numbers every servo it is given, and nothing more', () {
+    // The link knows nothing about joints or claws: what arrives is already one
+    // angle per servo, in the same order as the pin map that was pushed. A
+    // claw's mirrored half is just another angle by the time it gets here.
     expect(ArmLink.command([115, 95, 108, 60]), '1,115;2,95;3,108;4,60;');
     expect(
-      ArmLink.command([115, 95, 108, 60], mirrorClaw: true),
+      ArmLink.command([115, 95, 108, 60, 120]),
       '1,115;2,95;3,108;4,60;5,120;',
     );
-    // A fifth joint owns channel 5. Mirroring the claw onto it would overwrite
-    // that joint on every command, so the mirror stops at four.
-    expect(
-      ArmLink.command([10, 20, 30, 40, 50], mirrorClaw: true),
-      '1,10;2,20;3,30;4,40;5,50;',
-    );
+    expect(ArmLink.command(const []), '');
   });
 
   test('writes an unassigned joint as -1', () {

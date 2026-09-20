@@ -61,9 +61,9 @@ serial needs almost no rewriting. Up to nine channels can be driven — eight
 joints and a gripper — and which GPIO each one runs on is assigned on the app's
 **Board** screen and pushed to the board on every connect.
 
-On an arm of four joints or fewer, channel 5 carries the claw mirrored
-(`180 - angle`), for a gripper on two opposed servos, exactly as the desktop
-script did. A fifth joint takes that channel back and the mirror stops.
+A joint can drive two servos facing each other — which is how a claw closes.
+The second one is given `180 - angle` on a channel of its own, so it is one
+slider and one recorded angle on screen, and two servos on the wire.
 
 The socket is quicker — no handshake and no headers per command, so an angle
 lands in a millisecond or two rather than twenty or forty. What it costs is that
@@ -127,7 +127,7 @@ with a click of haptic feedback at each boundary.
 | screen | what |
 | --- | --- |
 | **Track** | Camera, hand skeleton, live angles, frame rate. Flip camera, mirror, and an Auto/Manual switch. Leaves the bar entirely on an arm of more than four joints, which is more than the camera can drive. |
-| **Control** | Drive each joint by hand, one slider each. |
+| **Control** | Drive each joint by hand, one slider each — and, below them, record the pose as a named step. Drag steps into order, give each a speed and a hold, and play the routine back. Saved on the phone. |
 | **Board** | The ESP32 drawing. Drag a joint onto the pin it is wired to, and pick how many joints the arm has — 4 to 9 DOF. |
 | **Arm** | ESP32 address, connection test, the send switch, and the rate limit. |
 | **Theme** | Light, dark or follow the system; five accents, applied instantly. |
@@ -223,7 +223,6 @@ someone else:
 
 - Acknowledgements from the ESP32, so the app can tell a delivered command from
   a servo that never moved
-- Recorded step sequences: name a pose, reorder the steps, play them back
 - Servo smoothing — raw landmarks are jittery frame to frame
 - Calibration for the mapping constants, which are currently the Python's
 - Optional full-native CameraX pipeline to get past the 26 fps channel ceiling

@@ -5,11 +5,14 @@ import 'screens/appearance_screen.dart';
 import 'screens/board_screen.dart';
 import 'screens/connection_screen.dart';
 import 'screens/control_screen.dart';
+import 'screens/steps_screen.dart';
 import 'screens/track_screen.dart';
 import 'services/app_settings.dart';
 import 'services/arm_controller.dart';
 import 'services/arm_link.dart';
 import 'services/joint_config.dart';
+import 'services/sequence_player.dart';
+import 'services/sequence_store.dart';
 import 'services/tracker.dart';
 import 'widgets/glass.dart';
 import 'widgets/slide_nav_bar.dart';
@@ -25,14 +28,25 @@ Future<void> main() async {
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   final settings = await AppSettings.load();
   final joints = await JointConfig.load();
-  runApp(SmartArmApp(settings: settings, joints: joints));
+  final sequences = await SequenceStore.load();
+  runApp(SmartArmApp(
+    settings: settings,
+    joints: joints,
+    sequences: sequences,
+  ));
 }
 
 class SmartArmApp extends StatelessWidget {
-  const SmartArmApp({super.key, required this.settings, required this.joints});
+  const SmartArmApp({
+    super.key,
+    required this.settings,
+    required this.joints,
+    required this.sequences,
+  });
 
   final AppSettings settings;
   final JointConfig joints;
+  final SequenceStore sequences;
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +92,11 @@ class SmartArmApp extends StatelessWidget {
           themeMode: settings.themeMode,
           theme: theme(Brightness.light),
           darkTheme: theme(Brightness.dark),
-          home: HomeShell(settings: settings, joints: joints),
+          home: HomeShell(
+            settings: settings,
+            joints: joints,
+            sequences: sequences,
+          ),
         );
       },
     );
@@ -86,10 +104,16 @@ class SmartArmApp extends StatelessWidget {
 }
 
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key, required this.settings, required this.joints});
+  const HomeShell({
+    super.key,
+    required this.settings,
+    required this.joints,
+    required this.sequences,
+  });
 
   final AppSettings settings;
   final JointConfig joints;
+  final SequenceStore sequences;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -102,25 +126,46 @@ class _HomeShellState extends State<HomeShell>
   static const _destinations = [
     NavDestination(Icons.back_hand_outlined, 'Track'),
     NavDestination(Icons.tune, 'Control'),
+    NavDestination(Icons.playlist_play, 'Steps'),
     NavDestination(Icons.developer_board_outlined, 'Board'),
     NavDestination(Icons.settings_input_antenna, 'Arm'),
     NavDestination(Icons.palette_outlined, 'Theme'),
   ];
 
-  /// One tint per screen, straight from the design. The glass stays the same
-  /// everywhere; only this changes, and it changes continuously as the bar is
-  /// scrubbed rather than cutting over at the boundary.
-  static const _tints = [
-    ScreenTint(Color(0xFFA855F7), Color(0xFFEC4899)),
-    ScreenTint(Color(0xFFFB923C), Color(0xFFF43F5E)),
-    ScreenTint(Color(0xFF818CF8), Color(0xFF6366F1)),
-    ScreenTint(Color(0xFF22D3EE), Color(0xFF3B82F6)),
-    ScreenTint(Color(0xFF34D399), Color(0xFF14B8A6)),
-  ];
+  /// One tint per screen, built from the chosen accent rather than from a fixed
+  /// palette: a teal app washed in orange and violet read as two designs at
+  /// once. Each screen takes the accent a different distance around the hue
+  /// wheel, so they stay distinguishable while belonging together — and the
+  /// whole set moves when the accent does.
+  List<ScreenTint> _tintsFor(Color accent) {
+    final base = HSLColor.fromColor(accent);
+    ScreenTint at(double turn, double lift) {
+      final a = base
+          .withHue((base.hue + turn) % 360)
+          .withSaturation((base.saturation * 0.95).clamp(0.35, 0.85))
+          .withLightness((base.lightness + lift).clamp(0.45, 0.72));
+      final b = base
+          .withHue((base.hue + turn + 26) % 360)
+          .withSaturation((base.saturation * 0.9).clamp(0.3, 0.8))
+          .withLightness((base.lightness + lift - 0.04).clamp(0.4, 0.68));
+      return ScreenTint(a.toColor(), b.toColor());
+    }
+
+    return [
+      at(-34, 0.06),
+      at(-12, 0.02),
+      at(10, 0.04),
+      at(32, 0.0),
+      at(54, 0.03),
+      at(76, 0.06),
+    ];
+  }
 
   late final ArmLink _link;
   late final ArmController _arm;
+  late final SequencePlayer _player;
   late final Tracker _tracker;
+  List<int> _lastVisible = const [];
   late final SlideSelection _nav;
 
   @override
@@ -134,20 +179,41 @@ class _HomeShellState extends State<HomeShell>
     // connects, and again whenever the board says it has none.
     _link.mapProvider = () => widget.joints.pinMap;
     _arm = ArmController(_link, widget.joints);
+    _player = SequencePlayer(_arm);
     _tracker = Tracker(_arm.fromHand);
 
     widget.settings.addListener(_pushLinkSettings);
-    widget.joints.addListener(_pushJointConfig);
+    widget.joints.addListener(_onJointsChanged);
+    _lastVisible = _visibleScreens;
     _pushJointConfig();
     _pushLinkSettings();
     _tracker.start();
   }
 
   void _pushJointConfig() {
-    _link.mirrorClaw = widget.joints.mirrorClaw;
     // The bar is shorter when Track is gone, and the pill must not be left on a
     // slot that no longer exists.
     _nav.count = _visibleScreens.length;
+  }
+
+  /// The bar, the tints and the pages are all built from the joint config, so a
+  /// change to it has to rebuild this - otherwise Track stays gone after the
+  /// arm shrinks back to something the camera can drive.
+  void _onJointsChanged() {
+    final before = _lastVisible;
+    final after = _visibleScreens;
+    _lastVisible = after;
+
+    _pushJointConfig();
+
+    // Keep the same screen under the thumb as the bar grows or shrinks, rather
+    // than sliding whatever now sits at that index into view.
+    if (_nav.index < before.length) {
+      final at = after.indexOf(before[_nav.index]);
+      if (at >= 0 && at != _nav.index) _nav.select(at);
+    }
+
+    setState(() {});
   }
 
   void _pushLinkSettings() {
@@ -163,8 +229,9 @@ class _HomeShellState extends State<HomeShell>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.settings.removeListener(_pushLinkSettings);
-    widget.joints.removeListener(_pushJointConfig);
+    widget.joints.removeListener(_onJointsChanged);
     _nav.dispose();
+    _player.dispose();
     _tracker.dispose();
     _arm.dispose();
     _link.dispose();
@@ -212,6 +279,12 @@ class _HomeShellState extends State<HomeShell>
         trailing: pill,
       ),
       ControlScreen(arm: _arm, trailing: pill),
+      StepsScreen(
+        arm: _arm,
+        store: widget.sequences,
+        player: _player,
+        trailing: pill,
+      ),
       BoardScreen(config: widget.joints, link: _link, trailing: pill),
       ConnectionScreen(
         settings: settings,
@@ -222,9 +295,10 @@ class _HomeShellState extends State<HomeShell>
       AppearanceScreen(settings: settings, trailing: pill),
     ];
 
+    final allTints = _tintsFor(settings.accentColor);
     final visible = _visibleScreens;
     final destinations = [for (final i in visible) _destinations[i]];
-    final tints = [for (final i in visible) _tints[i]];
+    final tints = [for (final i in visible) allTints[i]];
     final screens = [for (final i in visible) all[i]];
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -241,10 +315,15 @@ class _HomeShellState extends State<HomeShell>
         extendBody: true,
         body: Stack(
           children: [
+            // Its own layer: three full-screen gradients repaint on every frame
+            // of a scrub, and without this they drag the pages with them.
             Positioned.fill(
-              child: AnimatedBuilder(
-                animation: _nav,
-                builder: (context, _) => AmbientBackground(tint: _tintOf(tints)),
+              child: RepaintBoundary(
+                child: AnimatedBuilder(
+                  animation: _nav,
+                  builder: (context, _) =>
+                      AmbientBackground(tint: _tintOf(tints)),
+                ),
               ),
             ),
             for (var i = 0; i < screens.length; i++)
