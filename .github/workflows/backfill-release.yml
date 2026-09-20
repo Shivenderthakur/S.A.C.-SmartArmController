@@ -97,11 +97,29 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::signing secrets are required to backfill a release. See CONTRIBUTING.md."
+          missing=""
+          if [ -z "$KEYSTORE_BASE64" ]; then missing="$missing ANDROID_KEYSTORE_BASE64"; fi
+          if [ -z "$KEYSTORE_PASSWORD" ]; then missing="$missing ANDROID_KEYSTORE_PASSWORD"; fi
+          if [ -z "$KEY_ALIAS" ]; then missing="$missing ANDROID_KEY_ALIAS"; fi
+          if [ -z "$KEY_PASSWORD" ]; then missing="$missing ANDROID_KEY_PASSWORD"; fi
+
+          if [ -n "$missing" ]; then
+            echo "::error::cannot backfill a signed release. Empty here:$missing"
+            echo "::error::They must be Repository secrets on this repository, under the Actions tab of Settings -> Secrets and variables - not Dependabot, not Codespaces, and not an Environment secret (no job here declares an environment)."
             exit 1
           fi
-          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+          # Present but malformed is worse than absent: it would produce a
+          # keystore Gradle cannot open, halfway through the build.
+          if ! echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks" 2>/dev/null; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 is not valid base64. Regenerate it with: base64 -w0 your-release.jks"
+            exit 1
+          fi
+          if ! keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1; then
+            echo "::error::the keystore does not open with ANDROID_KEYSTORE_PASSWORD"
+            exit 1
+          fi
+
           printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
             "$RUNNER_TEMP/release.jks" "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > android/key.properties
 
