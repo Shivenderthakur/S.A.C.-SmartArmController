@@ -30,6 +30,10 @@ permissions:
 jobs:
   backfill:
     runs-on: ubuntu-latest
+    # The signing secrets are Environment secrets on sac-env, and a job is
+    # given only the secrets of an environment it declares. Without this line
+    # all four read as empty and the APK falls back to a debug key.
+    environment: sac-env
     permissions:
       contents: write
     concurrency: release
@@ -106,7 +110,7 @@ jobs:
 
           if [ -n "$missing" ]; then
             echo "::warning::Not signing. Empty here:$missing"
-            echo "::warning::This APK gets the runner's throwaway debug key, so it cannot be installed over another version. To fix it, add these as Repository secrets on this repository, under the Actions tab of Settings -> Secrets and variables - not Dependabot, not Codespaces, and not an Environment secret."
+            echo "::warning::This APK gets the runner's throwaway debug key, so it cannot be installed over another version. These live on the sac-env environment: Settings -> Environments -> sac-env. This job only receives them because it declares 'environment: sac-env', so check that line is still here."
             echo "signed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi

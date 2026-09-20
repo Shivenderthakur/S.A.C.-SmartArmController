@@ -11,6 +11,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # The signing secrets are Environment secrets on sac-env, and a job is
+    # given only the secrets of an environment it declares. Without this line
+    # all four read as empty and the APK falls back to a debug key.
+    environment: sac-env
     outputs:
       version: ${{ steps.version.outputs.version }}
       apk: ${{ steps.version.outputs.apk }}
@@ -74,7 +78,7 @@ jobs:
 
           if [ -n "$missing" ]; then
             echo "::warning::Not signing. Empty here:$missing"
-            echo "::warning::They must be Repository secrets on this repository, under the Actions tab of Settings -> Secrets and variables - not Dependabot, not Codespaces, and not an Environment secret (no job here declares an environment)."
+            echo "::warning::These live on the sac-env environment: Settings -> Environments -> sac-env. This job only receives them because it declares 'environment: sac-env', so check that line is still here. A secret added as a Repository secret, or to a different environment, reads as empty from this job."
             echo "signed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
